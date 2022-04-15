@@ -30,10 +30,12 @@ if __name__ == "__main__":
                         help="batch size (default: 256)")
     parser.add_argument("--num_episodes", type=int, default=32, metavar="N",
                         help="number of episodes (default: 32)")
-    parser.add_argument("--num_steps_model", type=int, default=256, metavar="N",
-                        help="number of steps to train model per iteration (default: 256)")
-    parser.add_argument("--num_episodes_agent", type=int, default=16, metavar="N",
-                        help="number of episodes to train agent per iteration (default: 16)")
+    parser.add_argument("--num_episodes_startup", type=int, default=4, metavar="N",
+                        help="number of episodes (default: 4)")
+    parser.add_argument("--num_steps_model", type=int, default=1024, metavar="N",
+                        help="number of steps to train model per iteration (default: 1024)")
+    parser.add_argument("--num_episodes_agent", type=int, default=8, metavar="N",
+                        help="number of episodes to train agent per iteration (default: 8)")
     parser.add_argument("--device", default="cpu",
                         help="device (default: cpu)")
     parser.add_argument("--replay_size", type=int, default=100000,
@@ -57,8 +59,8 @@ if __name__ == "__main__":
         dim_h=64,
         size_ensemble=5
     )
-    #EnvModel = envs.EnvModel
-    EnvModel = envs.EnvModelHallucinated
+    EnvModel = envs.EnvModel
+    #EnvModel = envs.EnvModelHallucinated
     env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model)
 
     agent = agents.AgentSAC(env_model.observation_space, env_model.action_space, args)
@@ -66,13 +68,16 @@ if __name__ == "__main__":
     dataset = data.DatasetSARS(capacity=args.replay_size)
     dataset_states_initial = data.DatasetNumpy()
 
+    for idx_episode in range(args.num_episodes_startup):
+        dataset_episode, state_initial, reward_episode = rollout.rollout_episode(env, agent)
+        dataset.concat(dataset_episode)
+
     for idx_episode in range(args.num_episodes):
         dataset_episode, state_initial, reward_episode = rollout.rollout_episode(env, agent)
         print("idx_episode: %i, reward_episode: %f" % (idx_episode, reward_episode))
         dataset.concat(dataset_episode)
         dataset_states_initial.append(state_initial)
-        if len(dataset) > args.batch_size:
-            model = training.train_ensemble(model, dataset, args)
+        model = training.train_ensemble(model, dataset, args)
         model.eval()
         env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model)
         agent = training.train_sac(agent, env_model, args)

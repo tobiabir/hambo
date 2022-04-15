@@ -9,20 +9,18 @@ import envs
 import rollout
 
 def evaluate(agent, env, args):
+    agent.eval()
     reward = 0
-
-    for idx_episode in range(args.num_episodes):
+    for idx_episode in range(args.num_episodes_eval):
         _, _, reward_episode = rollout.rollout_episode(env, agent)
-        print("idx_episode: %i, reward_episode: %f" % (idx_episode, reward_episode))
         reward += reward_episode
-
-    reward_avg = reward / args.num_episodes
-    print("avg. reward: %f" % (reward_avg))
+    reward_avg = reward / args.num_episodes_eval
+    return reward_avg
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="HUCRL")
-    parser.add_argument("--num_episodes", type=int, default=32, metavar="N",
+    parser.add_argument("--num_episodes_eval", type=int, default=32, metavar="N",
                         help="number of episodes (default: 32)")
     parser.add_argument("--seed", type=int, default=42, metavar="N",
                         help="random seed (default: 42)")

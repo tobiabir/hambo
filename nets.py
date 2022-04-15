@@ -45,8 +45,8 @@ class NetDense(torch.nn.Module):
         x = x.repeat(self.size_ensemble, 1, 1)
         y = self.layers(x).squeeze(dim=1)
         mean = torch.mean(y, dim=0)
-        std = torch.std(y, dim=0)
-        return y, mean, std
+        var = torch.var(y, dim=0)
+        return y, mean, var
 
 class NetGaussHomo(torch.nn.Module):
 

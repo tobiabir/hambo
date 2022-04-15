@@ -10,6 +10,14 @@ class EnvPoint(gym.core.Env):
         self._episode_steps = 0
         self._max_episode_steps = 100
 
+    @property
+    def action_space(self):
+        return gym.spaces.Box(low=-0.1, high=0.1, shape=(2,))
+
+    @property
+    def observation_space(self):
+        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2,))
+
     def step(self, action):
         """
         Run one timestep of the environment's dynamics. When end of episode
@@ -30,6 +38,8 @@ class EnvPoint(gym.core.Env):
         done = self.done(self._state)
         next_observation = np.copy(self._state)
         self._episode_steps += 1
+        if done:
+            self.reset()
         return next_observation, reward, done, {}
 
     def reset(self, seed=None):
@@ -44,14 +54,6 @@ class EnvPoint(gym.core.Env):
         observation = np.copy(self._state)
         self._episode_steps = 0
         return observation
-
-    @property
-    def observation_space(self):
-        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2,))
-
-    @property
-    def action_space(self):
-        return gym.spaces.Box(low=-0.1, high=0.1, shape=(2,))
 
     def done(self, obs):
         if self._max_episode_steps <= self._episode_steps:
@@ -86,6 +88,8 @@ class EnvModel(gym.core.Env):
             self.state = state_next
             self.steps += 1
             done = self.done(self.state)
+            if done:
+                self.reset()
             return self.state, reward, done, {}
 
     def done(self, obs):
@@ -130,6 +134,8 @@ class EnvModelHallucinated(EnvModel):
             self.state = state_next
             self.steps += 1
             done = self.done(self.state)
+            if done:
+                self.reset()
             return self.state, reward, done, {}
 
     @property
