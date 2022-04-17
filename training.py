@@ -23,7 +23,7 @@ def train_ensemble(model, dataset, args):
         loss = torch.sum(losses)
         return loss
     for idx_step in range(args.num_steps_model):
-        state, action, reward, state_next, done = dataset.sample(args.batch_size)
+        state, action, reward, state_next, done = dataset.sample(args.size_batch)
         state_action = torch.cat((state, action), dim=-1)
         state_next_pred, _, _ = model(state_action)
         loss = fn_loss(state_next_pred, state_next)
@@ -39,9 +39,9 @@ def train_sac(agent, env, args):
     for idx_episode in range(args.num_episodes_agent):
         mem_episode, _, reward_episode = rollout.rollout_episode(env, agent)
         mem.concat(mem_episode)
-        if len(mem) > args.batch_size:
+        if len(mem) > args.size_batch:
             for idx_step in range(128):
-                batch = mem.sample(args.batch_size)
+                batch = mem.sample(args.size_batch)
                 loss_q, loss_pi = agent.step(batch)
     
     return agent
