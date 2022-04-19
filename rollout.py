@@ -14,7 +14,7 @@ def rollout_episode(env, agent):
         action = agent.get_action(state)[:dim_action]
         state_next, reward, done, _ = env.step(action)
         
-        mask = 0. if idx_step == env._max_episode_steps else float(done)
+        mask = 0. if idx_step == env.max_steps_episode else float(done)
         dataset.append(state, action, reward, state_next, mask)
 
         state = state_next

@@ -31,7 +31,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     #env = gym.make("Pendulum-v1", g=9.81)
-    #env = gym.make("CartPole-v1")
     #env = gym.make("MountainCarContinuous-v0")
     env = envs.EnvPoint()
 

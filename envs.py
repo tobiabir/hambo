@@ -2,13 +2,14 @@ import gym
 import numpy as np
 import torch
 
+import utils
 
 class EnvPoint(gym.core.Env):
 
     def __init__(self):
         super().__init__()
         self._episode_steps = 0
-        self._max_episode_steps = 100
+        self.max_steps_episode = 100
 
     @property
     def action_space(self):
@@ -56,7 +57,7 @@ class EnvPoint(gym.core.Env):
         return observation
 
     def done(self, obs):
-        if self._max_episode_steps <= self._episode_steps:
+        if self.max_steps_episode <= self._episode_steps:
             return True
         elif abs(obs[0]) < 0.01 and abs(obs[1]) < 0.01:
             return True
@@ -66,6 +67,18 @@ class EnvPoint(gym.core.Env):
     def reward(self, obs, act, obs_next):
         return - np.sqrt(obs_next[0]**2 + obs_next[1]**2)
 
+class WrapperEnvPendulum(gym.core.Wrapper):
+
+    def __init__(self, env):
+        super().__init__(env)
+        self.max_steps_episode = 200
+
+    def reward(self, state, action, state_next):
+        th, thdot = self.env.state
+        action = np.clip(action, -self.env.max_torque, self.env.max_torque)[0]
+        th_normalized = ((th + np.pi) % (2 * np.pi)) - np.pi
+        costs = th_normalized**2 + 0.1 * thdot**2 + 0.001 * action**2
+        return -costs
 
 class EnvModel(gym.core.Env):
 
@@ -75,7 +88,7 @@ class EnvModel(gym.core.Env):
         self.dataset_states_initial = dataset_states_initial
         self.model_reward = model_reward
         self.model_transition = model_transition
-        self._max_episode_steps = 100
+        self.max_steps_episode = 100
         self.steps = 0
 
     def step(self, action):
@@ -94,7 +107,7 @@ class EnvModel(gym.core.Env):
             return self.state, reward, done, {}
 
     def done(self, obs):
-        return self._max_episode_steps <= self.steps
+        return self.max_steps_episode <= self.steps
 
     def reset(self, seed=None):
         super().reset(seed=seed)

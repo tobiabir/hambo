@@ -56,7 +56,7 @@ if __name__ == "__main__":
         writer = SummaryWriter(log_dir=dir_log)
 
     env = gym.make("Pendulum-v1", g=9.81)
-    #env = gym.make("CartPole-v1")
+    env = envs.WrapperEnvPendulum(env)
     #env = gym.make("MountainCarContinuous-v0")
     #env = envs.EnvPoint()
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         agent.train()
         action = agent.get_action(state)
         state_next, reward, done, _ = env.step(action)
-        mask = 0. if idx_step_episode == env._max_episode_steps else float(done) 
+        mask = 0. if idx_step_episode == env.max_steps_episode else float(done) 
         mem.append(state, action, reward, state_next, done)
         state = state_next
         idx_step_episode += 1

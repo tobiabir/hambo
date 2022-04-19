@@ -58,6 +58,7 @@ if __name__ == "__main__":
 
     #env = gym.make("MountainCarContinuous-v0")
     env = gym.make("Pendulum-v1", g=9.81)
+    env = envs.WrapperEnvPendulum(env)
     #env = envs.EnvPoint()
     dim_action = env.action_space.shape[0]
 
@@ -89,7 +90,7 @@ if __name__ == "__main__":
         agent.train()
         action = agent.get_action(state)[:dim_action]
         state_next, reward, done, _ = env.step(action)
-        mask = 0. if idx_step_episode == env._max_episode_steps else float(done) 
+        mask = 0. if idx_step_episode == env.max_steps_episode else float(done) 
         dataset.append(state, action, reward, state_next, done)
         state = state_next
         idx_step_episode += 1
@@ -97,7 +98,7 @@ if __name__ == "__main__":
             dataset_states_initial.append(state)
             idx_step_episode = 0
         if (idx_step + 1) % args.interval_train == 0 and len(dataset) >= args.size_batch:
-            training.train_ensemble_map(model, dataset, args)
+            training.train_ensemble(model, dataset, args)
             model.eval()
             env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model)
             training.train_sac(agent, env_model, args)
