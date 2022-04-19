@@ -36,25 +36,23 @@ class ModelGP(torch.nn.Module):
             self.fns_loss.append(lambda y_pred, y_train: -mll(y_pred, y_train))
 
     def forward(self, x):
-        ys = []
         means = []
         variances = []
-        #prob_logs = []
         for idx_model in range(len(self.models)):
             distr = self.models[idx_model](x)
             mean = distr.mean
             covar = distr.covariance_matrix
             covar = covar.clamp(min=STD_MIN, max=STD_MAX)
             distr = gpytorch.distributions.MultivariateNormal(mean, covar)
-            ys.append(distr.sample())
             means.append(mean)
             variances.append(covar[0])
-            #prob_logs.append(distr.log_prob(ys[idx_model]))
-        y = torch.stack(ys, dim=-1)
         mean = torch.stack(means, dim=-1)
         var = torch.stack(variances, dim=-1)
-        #prob_log = torch.stack(prob_logs, dim=-1)
-        return y, mean, var#prob_log
+        std = torch.sqrt(var)
+        return mean, std
+
+    def get_distr(self, x):
+        return self(x)
 
     def step(self):
         losses = []

@@ -25,13 +25,31 @@ def train_ensemble(model, dataset, args):
     for idx_step in range(args.num_steps_model):
         state, action, reward, state_next, done = dataset.sample(args.size_batch)
         state_action = torch.cat((state, action), dim=-1)
-        state_next_pred, _, _ = model(state_action)
+        state_next_pred = model(state_action)
         loss = fn_loss(state_next_pred, state_next)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
     return model
 
+def train_ensemble_map(model, dataset, args):
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    def fn_loss(y_pred_mean, y_pred_std, y_true):
+        loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_true).sum()
+        for parameter in model.parameters():
+            loss -= torch.sum(parameter**2)
+        return loss
+    for idx_step in range(args.num_steps_model):
+        state, action, reward, state_next, done = dataset.sample(args.size_batch)
+        state_action = torch.cat((state, action), dim=-1)
+        state_next_means, state_next_stds = model(state_action)
+        loss = fn_loss(state_next_means, state_next_stds, state_next)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    return model
+        
 def train_sac(agent, env, args):
 
     mem = data.DatasetSARS(capacity=args.replay_size)

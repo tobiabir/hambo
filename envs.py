@@ -83,7 +83,8 @@ class EnvModel(gym.core.Env):
             state_action = np.concatenate((self.state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32).unsqueeze(dim=0)
-            state_next = self.model_transition(state_action)[0].numpy()[0]
+            state_next_mean, state_next_std = self.model_transition.get_distr(state_action)
+            state_next = state_next_mean.numpy()
             reward = self.model_reward(self.state, action, state_next)
             self.state = state_next
             self.steps += 1

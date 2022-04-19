@@ -17,7 +17,7 @@ import training
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="HUCRL")
-    parser.add_argument("--id_experiment", type=str, required=True,
+    parser.add_argument("--id_experiment", type=str,
                         help="id of the experiment")
     parser.add_argument("--gamma", type=float, default=0.99, metavar="G",
                         help="discount factor for reward (default: 0.99)")
@@ -51,13 +51,15 @@ if __name__ == "__main__":
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
 
-    dir_log = os.path.join("Logs", "Training")
-    dir_log = os.path.join(dir_log, args.id_experiment)
-    writer = SummaryWriter(log_dir=dir_log)
+    if args.id_experiment is not None:
+        dir_log = os.path.join("Logs", "Training")
+        dir_log = os.path.join(dir_log, args.id_experiment)
+        writer = SummaryWriter(log_dir=dir_log)
 
     #env = gym.make("MountainCarContinuous-v0")
     #env = gym.make("Pendulum-v1", g=9.81)
     env = envs.EnvPoint()
+    dim_action = env.action_space.shape[0]
 
     # setting rng seeds
     random.seed(args.seed)    
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     state = env.reset(seed=args.seed)
     
-    model = nets.NetDense(
+    model = nets.NetGaussHomo(
         dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
         dim_y=env.observation_space.shape[0],
         num_h=1,
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     idx_step_episode = 0
     for idx_step in range(args.num_steps):
         agent.train()
-        action = agent.get_action(state)
+        action = agent.get_action(state)[:dim_action]
         state_next, reward, done, _ = env.step(action)
         mask = 0. if idx_step_episode == env._max_episode_steps else float(done) 
         dataset.append(state, action, reward, state_next, done)
@@ -95,13 +97,14 @@ if __name__ == "__main__":
             dataset_states_initial.append(state)
             idx_step_episode = 0
         if (idx_step + 1) % args.interval_train == 0 and len(dataset) >= args.size_batch:
-            training.train_ensemble(model, dataset, args)
+            training.train_ensemble_map(model, dataset, args)
             model.eval()
             env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model)
             training.train_sac(agent, env_model, args)
         if (idx_step + 1) % args.interval_eval == 0:
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args)
-            writer.add_scalar("reward", reward_avg, idx_step + 1) 
+            if args.id_experiment is not None:
+                writer.add_scalar("reward", reward_avg, idx_step + 1) 
             print("idx_step: %i, reward: %f" % (idx_step, reward_avg))
 

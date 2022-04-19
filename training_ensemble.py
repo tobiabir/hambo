@@ -18,7 +18,7 @@ if __name__ == "__main__":
                         help="learning rate (default: 0.003)")
     parser.add_argument("--seed", type=int, default=42, metavar="N",
                         help="random seed (default: 42)")
-    parser.add_argument("--batch_size", type=int, default=256, metavar="N",
+    parser.add_argument("--size_batch", type=int, default=256, metavar="N",
                         help="batch size (default: 256)")
     parser.add_argument("--num_episodes", type=int, default=32, metavar="N",
                         help="number of episodes (default: 32)")
@@ -54,14 +54,14 @@ if __name__ == "__main__":
     dim_h = 16
     num_h = 2
     size_ensemble = 8
-    model = nets.NetDense(dim_x, dim_y, num_h, dim_h, size_ensemble)
+    model = nets.NetGaussHomo(dim_x, dim_y, num_h, dim_h, size_ensemble)
 
-    model = training.train_ensemble(model, mem, args)
+    model = training.train_ensemble_map(model, mem, args)
 
     state, action, reward, state_next, done = mem.sample(1)
     state_action = torch.cat((state, action), dim=-1)
-    y, mean, std = model(state_action)
-    print(state_next)
+    mean, std = model(state_action)
+    print(state_action)
     print(mean)
     print(std)
 

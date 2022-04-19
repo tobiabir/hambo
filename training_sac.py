@@ -37,11 +37,11 @@ if __name__ == "__main__":
     parser.add_argument("--num_steps", type=int, default=4096, metavar="N",
                         help="number of steps (default: 4096)")
     parser.add_argument("--interval_train", type=int, default=128, metavar="N",
-                        help="interval of steps after which a round of training (default: 128)")
+                        help="training round interval in steps (default: 128)")
     parser.add_argument("--num_steps_train", type=int, default=512, metavar="N",
                         help="number of steps (default: 512)")
     parser.add_argument("--interval_eval", type=int, default=128, metavar="N",
-                        help="interval of steps after which a round of evaluation is done (default: 128)")
+                        help="evaluation round interval in steps (default: 128)")
     parser.add_argument("--num_episodes_eval", type=int, default=16, metavar="N",
                         help="number of episodes to evaluate (default: 16)")
     parser.add_argument("--device", default="cpu",
@@ -50,14 +50,15 @@ if __name__ == "__main__":
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
 
-    dir_log = os.path.join("Logs", "Training")
-    dir_log = os.path.join(dir_log, args.id_experiment)
-    writer = SummaryWriter(log_dir=dir_log)
+    if args.id_experiment is not None:
+        dir_log = os.path.join("Logs", "Training")
+        dir_log = os.path.join(dir_log, args.id_experiment)
+        writer = SummaryWriter(log_dir=dir_log)
 
     #env = gym.make("Pendulum-v1", g=9.81)
     #env = gym.make("CartPole-v1")
     #env = gym.make("MountainCarContinuous-v0")
-    env = envs.EnvPoint()
+    #env = envs.EnvPoint()
 
     # setting rng seeds
     random.seed(args.seed)    
@@ -87,6 +88,7 @@ if __name__ == "__main__":
         if (idx_step + 1) % args.interval_eval == 0:
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args)
-            writer.add_scalar("reward", reward_avg, idx_step + 1) 
+            if args.id_experiment is not None:
+                writer.add_scalar("reward", reward_avg, idx_step + 1) 
             print("idx_step: %i, reward: %f" % (idx_step, reward_avg))
 

@@ -44,30 +44,40 @@ class NetDense(torch.nn.Module):
     def forward(self, x):
         x = x.repeat(self.size_ensemble, 1, 1)
         y = self.layers(x).squeeze(dim=1)
+        return y
+
+    def get_distr(self, x):
+        y = self(x)
         mean = torch.mean(y, dim=0)
-        var = torch.var(y, dim=0)
-        return y, mean, var
+        std = torch.std(y, dim=0)
+        return mean, std
 
 class NetGaussHomo(torch.nn.Module):
 
     def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
         super().__init__()
+        self.size_ensemble = size_ensemble
         self.net = NetDense(dim_x, dim_y, num_h, dim_h, size_ensemble)
         self.stds_log = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, 1,dim_y)))
         torch.nn.init.kaiming_uniform_(self.stds_log, a=math.sqrt(5))
 
     def forward(self, x):
-        means, _, _ = self.net(x)
+        means = self.net(x)
         stds_log = torch.clamp(self.stds_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
+        if len(means.shape) == 2:
+            stds_log = stds_log.squeeze(dim=1)
         stds = stds_log.exp()
+        return means, stds
+
+    def get_distr(self, x):
+        means, stds = self(x)
         mean = torch.mean(means, dim=0)
-        var_aleatoric = torch.mean(stds**2, dim=0)
-        var_epistemic = torch.var(means, dim=0)
-        var = var_aleatoric + var_epistemic
-        std = torch.sqrt(var)
-        distr = torch.distributions.Normal(mean, std)
-        y = distr.rsample()
-        return y, mean, std
+        #var_aleatoric = torch.mean(stds**2, dim=0)
+        #var_epistemic = torch.var(means, dim=0)
+        #var = var_aleatoric + var_epistemic
+        #std = torch.sqrt(var)
+        std_epistemic = torch.std(means, dim=0)
+        return mean, std_epistemic
 
 class NetGauss(torch.nn.Module):
 
@@ -79,7 +89,7 @@ class NetGauss(torch.nn.Module):
         self.head_std_log = torch.nn.Linear(dim_h, dim_y)
 
     def forward(self, x):
-        _, h, _ = self.base(x)
+        h, _ = self.base.get_distr(x)
         h = self.activation(h)
         mean = self.head_mean(h)
         std_log = self.head_std_log(h)
@@ -89,7 +99,6 @@ class NetGauss(torch.nn.Module):
         y = distr.rsample()
         prob_log = distr.log_prob(y)
         return y, mean, prob_log
-
 
 class PolicyGauss(torch.nn.Module):
 
@@ -126,6 +135,6 @@ class NetDoubleQ(torch.nn.Module):
 
     def forward(self, state, action):
         x = torch.cat((state, action), dim=-1)
-        y1, mean1, std1 = self.net1(x)
-        y2, mean2, std2 = self.net2(x)
+        mean1, std1 = self.net1.get_distr(x)
+        mean2, std2 = self.net2.get_distr(x)
         return mean1, mean2
