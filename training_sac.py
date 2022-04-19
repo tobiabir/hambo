@@ -55,7 +55,7 @@ if __name__ == "__main__":
         dir_log = os.path.join(dir_log, args.id_experiment)
         writer = SummaryWriter(log_dir=dir_log)
 
-    #env = gym.make("Pendulum-v1", g=9.81)
+    env = gym.make("Pendulum-v1", g=9.81)
     #env = gym.make("CartPole-v1")
     #env = gym.make("MountainCarContinuous-v0")
     #env = envs.EnvPoint()

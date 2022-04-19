@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float, default=0.99, metavar="G",
                         help="discount factor for reward (default: 0.99)")
     parser.add_argument("--tau", type=float, default=0.005, metavar="G",
-                        help="target smoothing coefficient(τ) (default: 0.005)")
+                        help="target smoothing coefficient (default: 0.005)")
     parser.add_argument("--alpha", type=float, default=0.05, metavar="G",
                         help="regularizer weight alpha (default: 0.05)")
     parser.add_argument("--learn_alpha", default=False, action="store_true",
@@ -57,8 +57,8 @@ if __name__ == "__main__":
         writer = SummaryWriter(log_dir=dir_log)
 
     #env = gym.make("MountainCarContinuous-v0")
-    #env = gym.make("Pendulum-v1", g=9.81)
-    env = envs.EnvPoint()
+    env = gym.make("Pendulum-v1", g=9.81)
+    #env = envs.EnvPoint()
     dim_action = env.action_space.shape[0]
 
     # setting rng seeds
@@ -67,12 +67,12 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     state = env.reset(seed=args.seed)
     
-    model = nets.NetGaussHomo(
+    model = nets.NetDense(
         dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
         dim_y=env.observation_space.shape[0],
-        num_h=1,
-        dim_h=64,
-        size_ensemble=5
+        num_h=2,
+        dim_h=256,
+        size_ensemble=7
     )
     EnvModel = envs.EnvModel
     #EnvModel = envs.EnvModelHallucinated

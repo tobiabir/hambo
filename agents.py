@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import torch
 
@@ -67,7 +66,7 @@ class AgentSAC(Agent):
             dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high)
         self.optim_policy = torch.optim.Adam(
             self.policy.parameters(), lr=args.lr)
-        self.entropy_target = -math.prod(space_action.shape)
+        self.entropy_target = -np.prod(space_action.shape)
         self.learn_alpha = args.learn_alpha
         if self.learn_alpha:
             self.alpha_log = torch.zeros(1, requires_grad=True)
