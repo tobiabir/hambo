@@ -39,8 +39,6 @@ class EnvPoint(gym.core.Env):
         done = self.done(self._state)
         next_observation = np.copy(self._state)
         self._episode_steps += 1
-        if done:
-            self.reset()
         return next_observation, reward, done, {}
 
     def reset(self, seed=None):
@@ -80,6 +78,22 @@ class WrapperEnvPendulum(gym.core.Wrapper):
         costs = th_normalized**2 + 0.1 * thdot**2 + 0.001 * action**2
         return -costs
 
+class WrapperEnvHalfCheetah(gym.core.Wrapper):
+
+    def __init__(self, env):
+        super().__init__(env)
+        self.max_steps_episode = 1000
+
+    def reward(self, state, action, state_next):
+        pos_x = state[0]
+        pos_x_next = state_next[0]
+        velocity_x = (pos_x_next - pos_x) / self.env.dt
+        reward_forward = self.unwrapped._forward_reward_weight * velocity_x
+        cost_ctrl = self.unwrapped._ctrl_cost_weight * np.sum(np.square(action))
+        reward = reward_forward - cost_ctrl
+        return reward
+
+
 class EnvModel(gym.core.Env):
 
     def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition):
@@ -88,7 +102,7 @@ class EnvModel(gym.core.Env):
         self.dataset_states_initial = dataset_states_initial
         self.model_reward = model_reward
         self.model_transition = model_transition
-        self.max_steps_episode = 100
+        self.max_steps_episode = 4
         self.steps = 0
 
     def step(self, action):
@@ -97,14 +111,13 @@ class EnvModel(gym.core.Env):
             state_action = torch.tensor(
                 state_action, dtype=torch.float32).unsqueeze(dim=0)
             state_next_mean, state_next_std = self.model_transition.get_distr(state_action)
-            state_next = state_next_mean.numpy()
+            state_next = torch.distributions.Normal(state_next_mean, state_next_std).sample().numpy()
+            state_next = np.clip(state_next, self.space_observation.low, self.space_observation.high)
             reward = self.model_reward(self.state, action, state_next)
             self.state = state_next
             self.steps += 1
             done = self.done(self.state)
-            if done:
-                self.reset()
-            return self.state, reward, done, {}
+            return self.state.copy(), reward, done, {}
 
     def done(self, obs):
         return self.max_steps_episode <= self.steps
@@ -113,7 +126,7 @@ class EnvModel(gym.core.Env):
         super().reset(seed=seed)
         self.state = self.dataset_states_initial.sample(1)[0].numpy()
         self.steps = 0
-        return self.state  # TODO: attention! maybe this should be copied
+        return self.state.copy()
 
     @property
     def observation_space(self):
@@ -148,9 +161,7 @@ class EnvModelHallucinated(EnvModel):
             self.state = state_next
             self.steps += 1
             done = self.done(self.state)
-            if done:
-                self.reset()
-            return self.state, reward, done, {}
+            return self.state.copy(), reward, done, {}
 
     @property
     def observation_space(self):

@@ -8,13 +8,13 @@ import agents
 import envs
 import rollout
 
-def evaluate(agent, env, args):
+def evaluate(agent, env, num_episodes):
     agent.eval()
     reward = 0
-    for idx_episode in range(args.num_episodes_eval):
+    for idx_episode in range(num_episodes):
         _, _, reward_episode = rollout.rollout_episode(env, agent)
         reward += reward_episode
-    reward_avg = reward / args.num_episodes_eval
+    reward_avg = reward / num_episodes
     return reward_avg
 
 if __name__ == "__main__":

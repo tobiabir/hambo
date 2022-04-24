@@ -50,7 +50,7 @@ class DatasetSARS():
             self.pos = (self.pos + 1) % self.capacity
 
     def sample(self, num):
-        batch = random.sample(self.data, num)
+        batch = random.choices(self.data, k=num)
         batch = tuple(map(torch.stack, zip(*batch)))
         return batch 
 

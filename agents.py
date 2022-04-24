@@ -58,6 +58,8 @@ class AgentSAC(Agent):
         dim_h = 256
         self.critic = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h)
         self.critic_target = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h)
+        self.critic_target.load_state_dict(self.critic.state_dict())
+        self.critic_target.eval()
         self.optim_critic = torch.optim.Adam(
             self.critic.parameters(), lr=args.lr)
         bound_action_low = space_action.low[0]
@@ -66,11 +68,11 @@ class AgentSAC(Agent):
             dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high)
         self.optim_policy = torch.optim.Adam(
             self.policy.parameters(), lr=args.lr)
-        self.entropy_target = -np.prod(space_action.shape)
+        self.entropy_target = -np.prod(space_action.shape).astype(np.float32)
         self.learn_alpha = args.learn_alpha
         if self.learn_alpha:
-            self.alpha_log = torch.zeros(1, requires_grad=True)
-            self.alpha = self.alpha_log.exp()
+            self.alpha_log = torch.tensor(0., requires_grad=True)
+            self.alpha = self.alpha_log.detach().exp()
             self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=args.lr)
         else:
             self.alpha = args.alpha
@@ -79,7 +81,6 @@ class AgentSAC(Agent):
     def eval(self):
         self.policy.eval()
         self.critic.eval()
-        self.critic_target.eval()
         self.training = False
 
     def get_action(self, state):
@@ -109,7 +110,7 @@ class AgentSAC(Agent):
 
         action, _, prob_log = self.policy(state)
         q = torch.min(*self.critic(state, action))
-        loss_pi = ((self.alpha * prob_log) - q).mean()
+        loss_pi = (self.alpha * prob_log - q).mean()
         self.optim_policy.zero_grad()
         loss_pi.backward()
         self.optim_policy.step()
@@ -120,15 +121,16 @@ class AgentSAC(Agent):
             self.optim_alpha.zero_grad()
             loss_alpha.backward()
             self.optim_alpha.step()
-            self.alpha = self.alpha_log.exp()
+            self.alpha = self.alpha_log.detach().exp()
+        else:
+            loss_alpha = 0
 
         utils.soft_update(self.critic_target, self.critic, self.tau)
 
-        return loss_q, loss_pi
+        return loss_q, loss_pi, loss_alpha
 
     def train(self):
         self.policy.train()
         self.critic.train()
-        self.critic_target.train()
         self.training = True
 

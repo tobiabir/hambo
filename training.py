@@ -1,6 +1,8 @@
+import copy
 import torch
 
 import data
+import evaluation
 import models
 import rollout
 
@@ -22,7 +24,7 @@ def train_ensemble(model, dataset, args):
         losses = torch.mean(losses, dim=(1,2))
         loss = torch.sum(losses)
         return loss
-    for idx_step in range(args.num_steps_model):
+    for idx_step in range(args.num_steps_train_model):
         state, action, reward, state_next, done = dataset.sample(args.size_batch)
         state_action = torch.cat((state, action), dim=-1)
         state_next_pred = model(state_action)
@@ -30,6 +32,7 @@ def train_ensemble(model, dataset, args):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+    print(loss)
     return model
 
 def train_ensemble_map(model, dataset, args):
@@ -50,17 +53,37 @@ def train_ensemble_map(model, dataset, args):
         optimizer.step()
     return model
         
-def train_sac(agent, env, args):
+def train_sac(agent, env, dataset, args):
 
-    mem = data.DatasetSARS(capacity=args.replay_size)
+    state = env.reset()
 
-    for idx_episode in range(args.num_episodes_agent):
-        mem_episode, _, reward_episode = rollout.rollout_episode(env, agent)
-        mem.concat(mem_episode)
-        if len(mem) > args.size_batch:
-            for idx_step in range(128):
-                batch = mem.sample(args.size_batch)
-                loss_q, loss_pi = agent.step(batch)
-    
+    idx_step_episode = 0
+    for idx_step in range(args.num_steps_agent):
+        agent.train()
+        action = agent.get_action(state)
+        state_next, reward, done, _ = env.step(action)
+        mask = 0. if idx_step_episode + 1 == env.max_steps_episode else float(done) 
+        dataset.append(state, action, reward, state_next, mask)
+        state = state_next
+        idx_step_episode += 1
+        if done:
+            idx_step_episode = 0
+            state = env.reset()
+        if (idx_step + 1) % args.interval_train_agent == 0:
+            for idx_step_train in range(args.num_steps_train_agent):
+                batch = dataset.sample(args.size_batch)
+                loss_q, loss_pi, loss_alpha = agent.step(batch)
+                args.idx_step_train_agent_global += 1
+            print(f"idx_step_train_agent_global: {args.idx_step_train_agent_global}, idx_step_agent: {idx_step}, loss_q: {loss_q}, loss_pi: {loss_pi}, alpha: {agent.alpha}, loss_alpha: {loss_alpha}")
+        if "interval_eval_agent" in args and (idx_step + 1) % args.interval_eval_agent == 0:
+            env_eval = copy.deepcopy(env)
+            reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval_agent)
+            if args.id_experiment is not None:
+                args.writer.add_scalar("reward", reward_avg, args.idx_step_train_agent_global + 1) 
+            print(f"idx_step_agent: {idx_step}, reward: {reward_avg}")
+        #if "interval_checkpoint_agent" in args and (idx_step + 1) % args.interval_checkpoint_agent == 0:
+        #    checkpoint = {
+        #        "state_dict_
+
     return agent
 
