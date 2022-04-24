@@ -63,6 +63,7 @@ if __name__ == "__main__":
         env = envs.EnvPoint()
     elif args.name_env == "MountainCar":
         env = gym.make("MountainCarContinuous-v0")
+        env = envs.WrapperEnvMountainCar(env)
     elif args.name_env == "Pendulum":
         env = gym.make("Pendulum-v1", g=9.81)
         env = envs.WrapperEnvPendulum(env)

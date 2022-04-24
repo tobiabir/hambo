@@ -32,7 +32,6 @@ def train_ensemble(model, dataset, args):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    print(loss)
     return model
 
 def train_ensemble_map(model, dataset, args):

@@ -33,6 +33,14 @@ class AgentRandom(Agent):
     def get_action(self, state):
         return self.space_action.sample()
 
+class AgentZero(Agent):
+
+    def __init__(self, space_action):
+        self.dim_action = space_action.shape[0]
+
+    def get_action(self, state):
+        return np.zeros(self.dim_action, dtype=np.float32)
+
 class AgentPointOptimal(Agent):
 
     def __init__(self):

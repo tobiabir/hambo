@@ -65,6 +65,22 @@ class EnvPoint(gym.core.Env):
     def reward(self, obs, act, obs_next):
         return - np.sqrt(obs_next[0]**2 + obs_next[1]**2)
 
+class WrapperEnvMountainCar(gym.core.Wrapper):
+    
+    def __init__(self, env):
+        super().__init__(env)
+        self.max_steps_episode = 999
+
+    def reward(self, state, action, state_next):
+        position = state_next[0]
+        velocity = state_next[1]
+        done = bool(position >= self.unwrapped.goal_position and velocity >= self.unwrapped.goal_velocity)
+        reward = 0
+        if done:
+            reward = 100.0
+        reward -= 0.1 * action[0]**2
+        return reward
+
 class WrapperEnvPendulum(gym.core.Wrapper):
 
     def __init__(self, env):
@@ -92,7 +108,6 @@ class WrapperEnvHalfCheetah(gym.core.Wrapper):
         cost_ctrl = self.unwrapped._ctrl_cost_weight * np.sum(np.square(action))
         reward = reward_forward - cost_ctrl
         return reward
-
 
 class EnvModel(gym.core.Env):
 
@@ -153,19 +168,15 @@ class EnvModelHallucinated(EnvModel):
             state_action = np.concatenate((self.state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32).unsqueeze(dim=0)
-            _, mean, var = self.model_transition(state_action)
-            mean = mean.numpy()[0]
-            var = var.numpy()[0]
-            state_next = mean + self.beta * var * action_hallucinated
+            state_next_mean, state_next_std = self.model_transition.get_distr(state_action)
+            state_next_mean = state_next_mean.numpy()[0]
+            state_next_var = (state_next_std**2).numpy()[0]
+            state_next = state_next_mean + self.beta * state_next_var * action_hallucinated
             reward = self.model_reward(self.state, action, state_next)
             self.state = state_next
             self.steps += 1
             done = self.done(self.state)
             return self.state.copy(), reward, done, {}
-
-    @property
-    def observation_space(self):
-        return self.space_observation
 
     @property
     def action_space(self):
