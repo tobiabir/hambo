@@ -122,7 +122,7 @@ if __name__ == "__main__":
             training.train_sac(agent, env_model, dataset_agent, args)
         if (idx_step + 1) % args.interval_eval == 0:
             env_eval = copy.deepcopy(env)
-            reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval_agent)
+            reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)
             if args.id_experiment is not None:
                 writer.add_scalar("reward", reward_avg, idx_step + 1) 
             print(f"idx_step: {idx_step}, reward: {reward_avg}")
