@@ -39,8 +39,8 @@ if __name__ == "__main__":
                         help="number of steps (default: 4096)")
     parser.add_argument("--interval_train_agent", type=int, default=128,
                         help="training round interval in steps (default: 128)")
-    parser.add_argument("--num_steps_train_agent", type=int, default=512,
-                        help="number of steps (default: 512)")
+    parser.add_argument("--num_steps_train_agent", type=int, default=128,
+                        help="number of steps (default: 128)")
     parser.add_argument("--interval_eval_agent", type=int, default=128,
                         help="evaluation round interval in steps (default: 128)")
     parser.add_argument("--num_episodes_eval_agent", type=int, default=1,
