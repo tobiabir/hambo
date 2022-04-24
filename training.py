@@ -81,9 +81,6 @@ def train_sac(agent, env, dataset, args):
             if args.id_experiment is not None:
                 args.writer.add_scalar("reward", reward_avg, args.idx_step_train_agent_global + 1) 
             print(f"idx_step_agent: {idx_step}, reward: {reward_avg}")
-        #if "interval_checkpoint_agent" in args and (idx_step + 1) % args.interval_checkpoint_agent == 0:
-        #    checkpoint = {
-        #        "state_dict_
 
     return agent
 

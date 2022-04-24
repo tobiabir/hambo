@@ -17,6 +17,8 @@ import training
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="HUCRL")
+    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "HalfCheetah"], required=True,
+                        help="name of the environment")
     parser.add_argument("--id_experiment", type=str,
                         help="id of the experiment")
     parser.add_argument("--gamma", type=float, default=0.99,
@@ -45,7 +47,7 @@ if __name__ == "__main__":
                         help="interval of steps after which a round of training is done for agent (default: 128)")
     parser.add_argument("--num_steps_train_agent", type=int, default=128,
                         help="number of steps to train agent per iteration (default: 128)")
-    parser.add_argument("--interval_eval", type=int, default=128, metavar="N",
+    parser.add_argument("--interval_eval", type=int, default=128,
                         help="interval of steps after which a round of evaluation is done (default: 128)")
     parser.add_argument("--num_episodes_eval", type=int, default=1,
                         help="number of episodes to evaluate (default: 1)")
@@ -55,18 +57,26 @@ if __name__ == "__main__":
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
 
+    if args.name_env == "Point":
+        env = envs.EnvPoint()
+    elif args.name_env == "MountainCar":
+        env = gym.make("MountainCarContinuous-v0")
+    elif args.name_env == "Pendulum":
+        env = gym.make("Pendulum-v1", g=9.81)
+        env = envs.WrapperEnvPendulum(env)
+    elif args.name_env == "HalfCheetah":
+        env = gym.make("HalfCheetah-v3", exclude_current_positions_from_observation=False)
+        env = envs.WrapperEnvHalfCheetah(env)
+
+    dim_action = env.action_space.shape[0]
+    
     if args.id_experiment is not None:
         dir_log = os.path.join("Logs", "Training")
+        dir_log = os.path.join(dir_log, args.name_env)
         dir_log = os.path.join(dir_log, args.id_experiment)
         writer = SummaryWriter(log_dir=dir_log)
-
-    #env = envs.EnvPoint()
-    #env = gym.make("MountainCarContinuous-v0")
-    env = gym.make("HalfCheetah-v3", exclude_current_positions_from_observation=False)
-    env = envs.WrapperEnvHalfCheetah(env)
-    #env = gym.make("Pendulum-v1", g=9.81)
-    #env = envs.WrapperEnvPendulum(env)
-    dim_action = env.action_space.shape[0]
+        args.writer = writer
+    args.idx_step_train_agent_global = 0
 
     # setting rng seeds
     random.seed(args.seed)    
