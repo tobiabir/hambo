@@ -43,8 +43,8 @@ if __name__ == "__main__":
                         help="number of steps (default: 512)")
     parser.add_argument("--interval_eval_agent", type=int, default=128,
                         help="evaluation round interval in steps (default: 128)")
-    parser.add_argument("--num_episodes_eval_agent", type=int, default=16,
-                        help="number of episodes to evaluate (default: 16)")
+    parser.add_argument("--num_episodes_eval_agent", type=int, default=1,
+                        help="number of episodes to evaluate (default: 1)")
     parser.add_argument("--device", default="cpu",
                         help="device (default: cpu)")
     parser.add_argument("--replay_size", type=int, default=100000,
