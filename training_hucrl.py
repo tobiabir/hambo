@@ -23,6 +23,8 @@ if __name__ == "__main__":
                         help="id of the experiment")
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
+    parser.add_argument("--hallucinate", default=False, action="store_true",
+                        help="set to add hallucinated control (default: False)")
     parser.add_argument("--tau", type=float, default=0.005,
                         help="target smoothing coefficient (default: 0.005)")
     parser.add_argument("--alpha", type=float, default=0.05,
@@ -91,8 +93,10 @@ if __name__ == "__main__":
         dim_h=256,
         size_ensemble=7
     )
-    EnvModel = envs.EnvModel
-    #EnvModel = envs.EnvModelHallucinated
+    if args.hallucinate:
+        EnvModel = envs.EnvModelHallucinated
+    else:
+        EnvModel = envs.EnvModel
     env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model)
 
     agent = agents.AgentSAC(env_model.observation_space, env_model.action_space, args)
