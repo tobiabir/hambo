@@ -73,14 +73,14 @@ def train_sac(agent, env, dataset, args):
             for idx_step_train in range(args.num_steps_train_agent):
                 batch = dataset.sample(args.size_batch)
                 loss_q, loss_pi, loss_alpha = agent.step(batch)
-                args.idx_step_train_agent_global += 1
-            print(f"idx_step_train_agent_global: {args.idx_step_train_agent_global}, idx_step_agent: {idx_step}, loss_q: {loss_q}, loss_pi: {loss_pi}, alpha: {agent.alpha}, loss_alpha: {loss_alpha}")
+            print(f"idx_step_agent_global: {args.idx_step_agent_global}, idx_step_agent: {idx_step}, loss_q: {loss_q}, loss_pi: {loss_pi}, alpha: {agent.alpha}, loss_alpha: {loss_alpha}")
         if "interval_eval_agent" in args and (idx_step + 1) % args.interval_eval_agent == 0:
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval_agent)
             if args.id_experiment is not None:
-                args.writer.add_scalar("reward", reward_avg, args.idx_step_train_agent_global + 1) 
+                args.writer.add_scalar("reward", reward_avg, args.idx_step_agent_global + 1) 
             print(f"idx_step_agent: {idx_step}, reward: {reward_avg}")
+        args.idx_step_agent_global += 1
 
     return agent
 

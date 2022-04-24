@@ -76,7 +76,7 @@ if __name__ == "__main__":
         dir_log = os.path.join(dir_log, args.id_experiment)
         writer = SummaryWriter(log_dir=dir_log)
         args.writer = writer
-    args.idx_step_train_agent_global = 0
+    args.idx_step_agent_global = 0
 
     # setting rng seeds
     random.seed(args.seed)    
