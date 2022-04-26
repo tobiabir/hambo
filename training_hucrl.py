@@ -17,7 +17,7 @@ import training
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="HUCRL")
-    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "HalfCheetah"], required=True,
+    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "InvertedPendulum", "HalfCheetah"], required=True,
                         help="name of the environment")
     parser.add_argument("--id_experiment", type=str,
                         help="id of the experiment")
@@ -43,6 +43,8 @@ if __name__ == "__main__":
                         help="interval of steps after which a round of training is done (default: 128)")
     parser.add_argument("--num_steps_train_model", type=int, default=512,
                         help="number of steps to train model per iteration (default: 512)")
+    parser.add_argument("--num_steps_rollout_model", type=int, default=1,
+                        help="number of steps to rollout model from initial state (a.k.a. episode length) (default: 512)")
     parser.add_argument("--num_steps_agent", type=int, default=1024,
                         help="number of steps to train agent per iteration (default: 1024)")
     parser.add_argument("--interval_train_agent", type=int, default=128,
@@ -67,6 +69,9 @@ if __name__ == "__main__":
     elif args.name_env == "Pendulum":
         env = gym.make("Pendulum-v1", g=9.81)
         env = envs.WrapperEnvPendulum(env)
+    elif args.name_env == "InvertedPendulum":
+        env = gym.make("InvertedPendulum-v2")
+        env = envs.WrapperEnvInvertedPendulum(env)
     elif args.name_env == "HalfCheetah":
         env = gym.make("HalfCheetah-v3", exclude_current_positions_from_observation=False)
         env = envs.WrapperEnvHalfCheetah(env)
@@ -98,7 +103,9 @@ if __name__ == "__main__":
         EnvModel = envs.EnvModelHallucinated
     else:
         EnvModel = envs.EnvModel
-    env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model)
+    env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model, env.done)
+    env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
+    env_model = envs.WrapperEnv(env_model)
 
     agent = agents.AgentSAC(env_model.observation_space, env_model.action_space, args)
 
@@ -107,23 +114,22 @@ if __name__ == "__main__":
     dataset_states_initial = data.DatasetNumpy()
     dataset_states_initial.append(state)
 
-    idx_step_episode = 0
     for idx_step in range(args.num_steps):
         agent.train()
         action = agent.get_action(state)[:dim_action]
-        state_next, reward, done, _ = env.step(action)
-        mask = 0. if idx_step_episode + 1 == env.max_steps_episode else float(done) 
+        state_next, reward, done, info = env.step(action)
+        mask = float(done and not info["TimeLimit.truncated"]) 
         dataset.append(state, action, reward, state_next, mask)
         state = state_next
-        idx_step_episode += 1
         if done:
-            idx_step_episode = 0
             state = env.reset()
         dataset_states_initial.append(state)
         if (idx_step + 1) % args.interval_train == 0:
             training.train_ensemble(model, dataset, args)
             model.eval()
-            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model)
+            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done)
+            env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
+            env_model = envs.WrapperEnv(env_model)
             training.train_sac(agent, env_model, dataset_agent, args)
         if (idx_step + 1) % args.interval_eval == 0:
             env_eval = copy.deepcopy(env)

@@ -6,11 +6,6 @@ import utils
 
 class EnvPoint(gym.core.Env):
 
-    def __init__(self):
-        super().__init__()
-        self._episode_steps = 0
-        self.max_steps_episode = 100
-
     @property
     def action_space(self):
         return gym.spaces.Box(low=-0.1, high=0.1, shape=(2,))
@@ -38,7 +33,6 @@ class EnvPoint(gym.core.Env):
         reward = self.reward(prev_state, action, self._state)
         done = self.done(self._state)
         next_observation = np.copy(self._state)
-        self._episode_steps += 1
         return next_observation, reward, done, {}
 
     def reset(self, seed=None):
@@ -51,41 +45,37 @@ class EnvPoint(gym.core.Env):
         super().reset(seed=seed)
         self._state = np.random.uniform(-2, 2, size=(2,))
         observation = np.copy(self._state)
-        self._episode_steps = 0
         return observation
 
     def done(self, obs):
-        if self.max_steps_episode <= self._episode_steps:
-            return True
-        elif abs(obs[0]) < 0.01 and abs(obs[1]) < 0.01:
-            return True
-        else:
-            return False
+        return abs(obs[0]) < 0.01 and abs(obs[1]) < 0.01
 
     def reward(self, obs, act, obs_next):
         return - np.sqrt(obs_next[0]**2 + obs_next[1]**2)
 
-class WrapperEnvMountainCar(gym.core.Wrapper):
+class WrapperEnv(gym.core.Wrapper):
     
-    def __init__(self, env):
-        super().__init__(env)
-        self.max_steps_episode = 999
+    def step(self, action):
+        observation, reward, done, info = self.env.step(action)
+        if "TimeLimit.truncated" not in info:
+            info["TimeLimit.truncated"] = False
+        return observation, reward, done, info
 
+class WrapperEnvMountainCar(WrapperEnv):
+    
     def reward(self, state, action, state_next):
-        position = state_next[0]
-        velocity = state_next[1]
-        done = bool(position >= self.unwrapped.goal_position and velocity >= self.unwrapped.goal_velocity)
-        reward = 0
-        if done:
+        if self.done(state_next):
             reward = 100.0
         reward -= 0.1 * action[0]**2
         return reward
 
-class WrapperEnvPendulum(gym.core.Wrapper):
+    def done(self, state):
+        position = state[0]
+        velocity = state[1]
+        done = bool(position >= self.unwrapped.goal_position and velocity >= self.unwrapped.goal_velocity)
+        return done
 
-    def __init__(self, env):
-        super().__init__(env)
-        self.max_steps_episode = 200
+class WrapperEnvPendulum(WrapperEnv):
 
     def reward(self, state, action, state_next):
         th, thdot = self.env.state
@@ -94,11 +84,18 @@ class WrapperEnvPendulum(gym.core.Wrapper):
         costs = th_normalized**2 + 0.1 * thdot**2 + 0.001 * action**2
         return -costs
 
-class WrapperEnvHalfCheetah(gym.core.Wrapper):
+    def done(self, state):
+        return False
 
-    def __init__(self, env):
-        super().__init__(env)
-        self.max_steps_episode = 1000
+class WrapperEnvInvertedPendulum(WrapperEnv):
+
+    def reward(self, state, action, state_next):
+        return 1.0
+
+    def done(self, state):
+        return np.abs(state[1]) > 0.2
+
+class WrapperEnvHalfCheetah(WrapperEnv):
 
     def reward(self, state, action, state_next):
         pos_x = state[0]
@@ -108,17 +105,19 @@ class WrapperEnvHalfCheetah(gym.core.Wrapper):
         cost_ctrl = self.unwrapped._ctrl_cost_weight * np.sum(np.square(action))
         reward = reward_forward - cost_ctrl
         return reward
+    
+    def done(self, state):
+        return False
 
 class EnvModel(gym.core.Env):
 
-    def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition):
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination):
         self.space_observation = space_observation
         self.space_action = space_action
         self.dataset_states_initial = dataset_states_initial
         self.model_reward = model_reward
         self.model_transition = model_transition
-        self.max_steps_episode = 4
-        self.steps = 0
+        self.model_termination = model_termination
 
     def step(self, action):
         with torch.no_grad():
@@ -130,17 +129,12 @@ class EnvModel(gym.core.Env):
             state_next = np.clip(state_next, self.space_observation.low, self.space_observation.high)
             reward = self.model_reward(self.state, action, state_next)
             self.state = state_next
-            self.steps += 1
-            done = self.done(self.state)
+            done = self.model_termination(self.state)
             return self.state.copy(), reward, done, {}
-
-    def done(self, obs):
-        return self.max_steps_episode <= self.steps
 
     def reset(self, seed=None):
         super().reset(seed=seed)
         self.state = self.dataset_states_initial.sample(1)[0].numpy()
-        self.steps = 0
         return self.state.copy()
 
     @property
@@ -155,7 +149,7 @@ class EnvModel(gym.core.Env):
 class EnvModelHallucinated(EnvModel):
 
     def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, beta=1.):
-        super().__init__(space_observation, space_action, dataset_states_initial, model_reward, model_transition)
+        super().__init__(space_observation, space_action, dataset_states_initial, model_reward, model_transition, max_steps_episode)
         self.space_action_hallucinated = gym.spaces.Box(
             low=-1, high=1, shape=space_observation.shape, dtype=np.float32)
         self.beta = beta

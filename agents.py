@@ -92,13 +92,14 @@ class AgentSAC(Agent):
         self.training = False
 
     def get_action(self, state):
-        state = torch.Tensor(state).to(self.device)
-        action, mean, _ = self.policy(state)
-        if self.training:
-            action = action.detach().numpy()
-        else:
-            action = mean.detach().numpy()
-        return action
+        with torch.no_grad():
+            state = torch.Tensor(state).to(self.device)
+            action, mean, _ = self.policy(state)
+            if self.training:
+                action = action.numpy()
+            else:
+                action = mean.numpy()
+            return action
 
     def step(self, data):
         state, action, reward, state_next, done = data

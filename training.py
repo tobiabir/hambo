@@ -56,17 +56,14 @@ def train_sac(agent, env, dataset, args):
 
     state = env.reset()
 
-    idx_step_episode = 0
     for idx_step in range(args.num_steps_agent):
         agent.train()
         action = agent.get_action(state)
-        state_next, reward, done, _ = env.step(action)
-        mask = 0. if idx_step_episode + 1 == env.max_steps_episode else float(done) 
+        state_next, reward, done, info = env.step(action)
+        mask = float(done and not info["TimeLimit.truncated"])
         dataset.append(state, action, reward, state_next, mask)
         state = state_next
-        idx_step_episode += 1
         if done:
-            idx_step_episode = 0
             state = env.reset()
         if (idx_step + 1) % args.interval_train_agent == 0:
             for idx_step_train in range(args.num_steps_train_agent):

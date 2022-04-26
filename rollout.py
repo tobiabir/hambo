@@ -12,9 +12,9 @@ def rollout_episode(env, agent):
     done = False
     while not done:
         action = agent.get_action(state)[:dim_action]
-        state_next, reward, done, _ = env.step(action)
+        state_next, reward, done, info = env.step(action)
         
-        mask = 0. if idx_step + 1 == env.max_steps_episode else float(done)
+        mask = float(done and not info["TimeLimit.truncated"])
         dataset.append(state, action, reward, state_next, mask)
 
         state = state_next

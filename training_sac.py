@@ -17,7 +17,7 @@ import training
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Soft Actor-Critic")
-    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "HalfCheetah"], required=True,
+    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "InvertedPendulum", "HalfCheetah"], required=True,
                         help="name of the environment")
     parser.add_argument("--id_experiment", type=str,
                         help="id of the experiment")
@@ -53,12 +53,17 @@ if __name__ == "__main__":
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
+        env = gym.wrappers.TimeLimit(env, 100)
+        env = envs.WrapperEnv(env)
     elif args.name_env == "MountainCar":
         env = gym.make("MountainCarContinuous-v0")
         env = envs.WrapperEnvMountainCar(env)
     elif args.name_env == "Pendulum":
         env = gym.make("Pendulum-v1", g=9.81)
         env = envs.WrapperEnvPendulum(env)
+    elif args.name_env == "InvertedPendulum":
+        env = gym.make("InvertedPendulum-v2")
+        env = envs.WrapperEnvInvertedPendulum(env)
     elif args.name_env == "HalfCheetah":
         env = gym.make("HalfCheetah-v3", exclude_current_positions_from_observation=False)
         env = envs.WrapperEnvHalfCheetah(env)
