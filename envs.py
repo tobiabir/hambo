@@ -149,7 +149,7 @@ class EnvModel(gym.core.Env):
 class EnvModelHallucinated(EnvModel):
 
     def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, beta=1.):
-        super().__init__(space_observation, space_action, dataset_states_initial, model_reward, model_transition, max_steps_episode)
+        super().__init__(space_observation, space_action, dataset_states_initial, model_reward, model_transition)
         self.space_action_hallucinated = gym.spaces.Box(
             low=-1, high=1, shape=space_observation.shape, dtype=np.float32)
         self.beta = beta
