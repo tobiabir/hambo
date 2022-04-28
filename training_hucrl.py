@@ -55,14 +55,22 @@ if __name__ == "__main__":
                         help="interval of steps after which a round of evaluation is done (default: 128)")
     parser.add_argument("--num_episodes_eval", type=int, default=1,
                         help="number of episodes to evaluate (default: 1)")
-    parser.add_argument("--device", default="cpu",
-                        help="device (default: cpu)")
+    parser.add_argument("--device", default=None,
+                        help="device (default: gpu if available else cpu)")
     parser.add_argument("--replay_size", type=int, default=100000,
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
+    if args.device is None:
+        if torch.cuda.is_available():
+            args.device = "gpu"
+        else:
+            args.device = "cpu"
+    print(f"device: {args.device}")
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
+        env = gym.wrappers.TimeLimit(env, 100)
+        env = envs.WrapperEnv(env)
     elif args.name_env == "MountainCar":
         env = gym.make("MountainCarContinuous-v0")
         env = envs.WrapperEnvMountainCar(env)
@@ -98,12 +106,12 @@ if __name__ == "__main__":
         num_h=2,
         dim_h=256,
         size_ensemble=7
-    )
+    ).to(args.device)
     if args.hallucinate:
         EnvModel = envs.EnvModelHallucinated
     else:
         EnvModel = envs.EnvModel
-    env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model, env.done)
+    env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model, env.done, args)
     env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
     env_model = envs.WrapperEnv(env_model)
 
@@ -127,7 +135,7 @@ if __name__ == "__main__":
         if (idx_step + 1) % args.interval_train == 0:
             training.train_ensemble(model, dataset, args)
             model.eval()
-            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done)
+            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done, args)
             env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
             env_model = envs.WrapperEnv(env_model)
             training.train_sac(agent, env_model, dataset_agent, args)

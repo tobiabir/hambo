@@ -64,8 +64,8 @@ class AgentSAC(Agent):
         dim_action = space_action.shape[0]
         num_h = 2
         dim_h = 256
-        self.critic = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h)
-        self.critic_target = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h)
+        self.critic = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic_target = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_target.eval()
         self.optim_critic = torch.optim.Adam(
@@ -73,13 +73,13 @@ class AgentSAC(Agent):
         bound_action_low = space_action.low[0]
         bound_action_high = space_action.high[0]
         self.policy = nets.PolicyGauss(
-            dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high)
+            dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high).to(self.device)
         self.optim_policy = torch.optim.Adam(
             self.policy.parameters(), lr=args.lr)
         self.entropy_target = -np.prod(space_action.shape).astype(np.float32)
         self.learn_alpha = args.learn_alpha
         if self.learn_alpha:
-            self.alpha_log = torch.tensor(0., requires_grad=True)
+            self.alpha_log = torch.tensor(0., requires_grad=True).to(self.device)
             self.alpha = self.alpha_log.detach().exp()
             self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=args.lr)
         else:
@@ -96,13 +96,18 @@ class AgentSAC(Agent):
             state = torch.Tensor(state).to(self.device)
             action, mean, _ = self.policy(state)
             if self.training:
-                action = action.numpy()
+                action = action.cpu().numpy()
             else:
-                action = mean.numpy()
+                action = mean.cpu().numpy()
             return action
 
     def step(self, data):
         state, action, reward, state_next, done = data
+        state = state.to(self.device)
+        action = action.to(self.device)
+        reward = reward.to(self.device)
+        state_next = state_next.to(self.device)
+        done = done.to(self.device)
 
         with torch.no_grad():
             action_next, _, prob_log_next = self.policy(state_next)

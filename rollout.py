@@ -23,3 +23,18 @@ def rollout_episode(env, agent):
         idx_step += 1
 
     return dataset, state_initial, reward_episode
+
+def rollout_steps_sequential(env, agent, num_steps):
+    dataset = data.DatasetSARS()
+    state = env.reset()
+    for idx_step in range(num_steps):
+        action = agent.get_action(state)
+        state_next, reward, done, info = env.step(action)
+        mask = float(done and not info["TimeLimit.truncated"])
+        dataset.append(state, action, reward, state_next, mask)
+        state = state_next
+        if done:
+            state = env.reset()
+    return dataset
+
+

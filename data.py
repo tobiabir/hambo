@@ -23,13 +23,19 @@ class DatasetNumpy(torch.utils.data.Dataset):
         batch = torch.stack(batch, dim=0)
         return batch 
 
-class DatasetSARS():
+class DatasetSARS(torch.utils.data.Dataset):
     
     def __init__(self, capacity=sys.maxsize):
         super().__init__()
         self.capacity = capacity
         self.data = []
         self.pos = 0
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+    def __len__(self):
+        return len(self.data)
 
     def append(self, state, action, reward, state_next, done):
         if len(self) < self.capacity:
@@ -53,7 +59,4 @@ class DatasetSARS():
         batch = random.choices(self.data, k=num)
         batch = tuple(map(torch.stack, zip(*batch)))
         return batch 
-
-    def __len__(self):
-        return len(self.data)
 

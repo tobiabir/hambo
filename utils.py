@@ -28,6 +28,18 @@ def hard_update(target, source):
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(param.data)
 
+def get_dataloader(dataset, num_batches, size_batch, num_workers=2):
+    num_samples = num_batches * size_batch
+    sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=num_samples)
+    dataloader = torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=size_batch,
+        sampler=sampler,
+        num_workers=num_workers,
+    )
+    return dataloader
+    
+
 class Wrapper:
       
     def __init__(self, obj):

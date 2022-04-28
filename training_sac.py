@@ -45,11 +45,17 @@ if __name__ == "__main__":
                         help="evaluation round interval in steps (default: 128)")
     parser.add_argument("--num_episodes_eval_agent", type=int, default=1,
                         help="number of episodes to evaluate (default: 1)")
-    parser.add_argument("--device", default="cpu",
-                        help="device (default: cpu)")
+    parser.add_argument("--device", default=None,
+                        help="device (default: gpu if available else cpu)")
     parser.add_argument("--replay_size", type=int, default=100000,
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
+    if args.device is None:
+        if torch.cuda.is_available():
+            args.device = "gpu"
+        else:
+            args.device = "cpu"
+    print(f"device: {args.device}")
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
