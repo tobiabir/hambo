@@ -25,7 +25,7 @@ def rollout_episode(env, agent):
     return dataset, state_initial, reward_episode
 
 def rollout_steps(env, agent, dataset, num_steps):
-    state = env.reset()
+    state = env.state
     for idx_step in range(num_steps):
         action = agent.get_action(state)
         state_next, reward, done, info = env.step(action)
@@ -34,5 +34,4 @@ def rollout_steps(env, agent, dataset, num_steps):
         state = state_next
         if done:
             state = env.reset()
-
 

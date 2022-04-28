@@ -54,12 +54,22 @@ class EnvPoint(gym.core.Env):
         return - np.sqrt(obs_next[..., 0]**2 + obs_next[..., 1]**2)
 
 class WrapperEnv(gym.core.Wrapper):
+
+    def __init__(self, env):
+        super().__init__(env)
+        self.state = None
     
     def step(self, action):
-        observation, reward, done, info = self.env.step(action)
+        state, reward, done, info = self.env.step(action)
         if "TimeLimit.truncated" not in info:
             info["TimeLimit.truncated"] = False
-        return observation, reward, done, info
+        self.state = state
+        return state, reward, done, info
+
+    def reset(self, seed=None):
+        state = self.env.reset(seed=seed)
+        self.state = state
+        return state
 
 class WrapperEnvMountainCar(WrapperEnv):
     
@@ -84,13 +94,14 @@ class WrapperEnvPendulum(WrapperEnv):
 
     def done(self, state):
         if len(state.shape) == 2:
-            shape = (state.shape[0],)
-            return np.zeros(shape, dtype=np.bool_)
+            return np.zeros(state.shape[0], dtype=np.bool_)
         return False
 
 class WrapperEnvInvertedPendulum(WrapperEnv):
 
     def reward(self, state, action, state_next):
+        if len(state.shape) == 2:
+            return np.ones(state.shape[0], dtype=np.float32)
         return 1.0
 
     def done(self, state):
@@ -109,8 +120,7 @@ class WrapperEnvHalfCheetah(WrapperEnv):
     
     def done(self, state):
         if len(state.shape) == 2:
-            shape = (state.shape[0],)
-            return np.zeros(shape, dtype=np.bool_)
+            return np.zeros(state.shape[0], dtype=np.bool_)
         return False
 
 class EnvModel(gym.core.Env):

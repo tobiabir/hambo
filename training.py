@@ -30,6 +30,7 @@ def train_ensemble(model, dataset, args):
     for state, action, reward, state_next, done in dataloader:
         state_action = torch.cat((state, action), dim=-1).to(args.device)
         state_next_pred = model(state_action)
+        state_next = state_next.to(args.device)
         loss = fn_loss(state_next_pred, state_next)
         optimizer.zero_grad()
         loss.backward()
@@ -48,6 +49,7 @@ def train_ensemble_map(model, dataset, args):
         state, action, reward, state_next, done = dataset.sample(args.size_batch)
         state_action = torch.cat((state, action), dim=-1)
         state_next_means, state_next_stds = model(state_action)
+        state_next = state_next.to(args.device)
         loss = fn_loss(state_next_means, state_next_stds, state_next)
         optimizer.zero_grad()
         loss.backward()
@@ -59,6 +61,7 @@ def train_sac(agent, env, dataset, args):
         num_samples = np.gcd(args.interval_train_agent, args.interval_eval_agent)
     else:
         num_samples = args.interval_train_agent
+    env.reset()
     idx_step = 0
     while idx_step < args.num_steps_agent:
         agent.train()
@@ -67,6 +70,7 @@ def train_sac(agent, env, dataset, args):
         else:
             rollout.rollout_steps(env, agent, dataset, num_samples)
         idx_step += num_samples
+        args.idx_step_agent_global += num_samples
         if idx_step % args.interval_train_agent == 0:
             dataloader = utils.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
@@ -76,9 +80,8 @@ def train_sac(agent, env, dataset, args):
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval_agent)
             if args.id_experiment is not None:
-                args.writer.add_scalar("reward", reward_avg, args.idx_step_agent_global + 1) 
+                args.writer.add_scalar("reward", reward_avg, args.idx_step_agent_global) 
             print(f"idx_step_agent: {idx_step}, reward: {reward_avg}")
-        args.idx_step_agent_global += num_samples
 
     return agent
 
