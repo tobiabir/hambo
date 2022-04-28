@@ -78,7 +78,7 @@ def train_sac(agent, env, dataset, args):
             if args.id_experiment is not None:
                 args.writer.add_scalar("reward", reward_avg, args.idx_step_agent_global + 1) 
             print(f"idx_step_agent: {idx_step}, reward: {reward_avg}")
-        args.idx_step_agent_global += 1
+        args.idx_step_agent_global += num_samples
 
     return agent
 

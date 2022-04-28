@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_steps_train_model", type=int, default=512,
                         help="number of steps to train model per iteration (default: 512)")
     parser.add_argument("--num_steps_rollout_model", type=int, default=1,
-                        help="number of steps to rollout model from initial state (a.k.a. episode length) (default: 512)")
+                        help="number of steps to rollout model from initial state (a.k.a. episode length) (default: 1)")
     parser.add_argument("--num_steps_agent", type=int, default=1024,
                         help="number of steps to train agent per iteration (default: 1024)")
     parser.add_argument("--interval_train_agent", type=int, default=128,
