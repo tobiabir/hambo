@@ -15,7 +15,7 @@ def rollout_episode(env, agent):
         state_next, reward, done, info = env.step(action)
         
         mask = float(done and not info["TimeLimit.truncated"])
-        dataset.append(state, action, reward, state_next, mask)
+        dataset.push(state, action, reward, state_next, mask)
 
         state = state_next
 
@@ -24,17 +24,15 @@ def rollout_episode(env, agent):
 
     return dataset, state_initial, reward_episode
 
-def rollout_steps_sequential(env, agent, num_steps):
-    dataset = data.DatasetSARS()
+def rollout_steps(env, agent, dataset, num_steps):
     state = env.reset()
     for idx_step in range(num_steps):
         action = agent.get_action(state)
         state_next, reward, done, info = env.step(action)
         mask = float(done and not info["TimeLimit.truncated"])
-        dataset.append(state, action, reward, state_next, mask)
+        dataset.push(state, action, reward, state_next, mask)
         state = state_next
         if done:
             state = env.reset()
-    return dataset
 
 

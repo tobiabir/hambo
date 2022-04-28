@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 import torch
 
 import data
@@ -54,24 +55,24 @@ def train_ensemble_map(model, dataset, args):
     return model
         
 def train_sac(agent, env, dataset, args):
-
-    state = env.reset()
-
-    for idx_step in range(args.num_steps_agent):
+    if "interval_eval_agent" in args:
+        num_samples = np.gcd(args.interval_train_agent, args.interval_eval_agent)
+    else:
+        num_samples = args.interval_train_agent
+    idx_step = 0
+    while idx_step < args.num_steps_agent:
         agent.train()
-        action = agent.get_action(state)
-        state_next, reward, done, info = env.step(action)
-        mask = float(done and not info["TimeLimit.truncated"])
-        dataset.append(state, action, reward, state_next, mask)
-        state = state_next
-        if done:
-            state = env.reset()
-        if (idx_step + 1) % args.interval_train_agent == 0:
+        if hasattr(env, "rollout"):
+            env.rollout(agent, dataset, num_samples, args.num_steps_rollout_model)
+        else:
+            rollout.rollout_steps(env, agent, dataset, num_samples)
+        idx_step += num_samples
+        if idx_step % args.interval_train_agent == 0:
             dataloader = utils.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
                 loss_q, loss_pi, loss_alpha = agent.step(batch)
             print(f"idx_step_agent_global: {args.idx_step_agent_global}, idx_step_agent: {idx_step}, loss_q: {loss_q}, loss_pi: {loss_pi}, alpha: {agent.alpha}, loss_alpha: {loss_alpha}")
-        if "interval_eval_agent" in args and (idx_step + 1) % args.interval_eval_agent == 0:
+        if "interval_eval_agent" in args and idx_step % args.interval_eval_agent == 0:
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval_agent)
             if args.id_experiment is not None:

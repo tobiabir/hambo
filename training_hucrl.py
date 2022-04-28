@@ -127,7 +127,7 @@ if __name__ == "__main__":
         action = agent.get_action(state)[:dim_action]
         state_next, reward, done, info = env.step(action)
         mask = float(done and not info["TimeLimit.truncated"]) 
-        dataset.append(state, action, reward, state_next, mask)
+        dataset.push(state, action, reward, state_next, mask)
         state = state_next
         if done:
             state = env.reset()
