@@ -52,7 +52,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.device is None:
         if torch.cuda.is_available():
-            args.device = "gpu"
+            args.device = "cuda"
         else:
             args.device = "cpu"
     print(f"device: {args.device}")
