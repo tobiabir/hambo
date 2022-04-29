@@ -195,8 +195,8 @@ class EnvModelHallucinated(EnvModel):
     def _step(self, state, action):
         with torch.no_grad():
             dim_action = self.space_action.shape[0]
-            action_hallucinated = action[dim_action:]
-            action = action[:dim_action]
+            action_hallucinated = action[:, dim_action:]
+            action = action[:, :dim_action]
             state_action = np.concatenate((state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32, device=self.device)
