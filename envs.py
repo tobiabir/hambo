@@ -114,7 +114,7 @@ class WrapperEnvHalfCheetah(WrapperEnv):
         pos_x_next = state_next[..., 0]
         velocity_x = (pos_x_next - pos_x) / self.env.dt
         reward_forward = self.unwrapped._forward_reward_weight * velocity_x
-        cost_ctrl = self.unwrapped._ctrl_cost_weight * np.sum(np.square(action, axis=-1))
+        cost_ctrl = self.unwrapped._ctrl_cost_weight * np.sum(np.square(action), axis=-1)
         reward = reward_forward - cost_ctrl
         return reward
     
