@@ -4,6 +4,7 @@ import torch
 
 import utils
 
+
 class EnvPoint(gym.core.Env):
 
     @property
@@ -53,12 +54,13 @@ class EnvPoint(gym.core.Env):
     def reward(self, obs, act, obs_next):
         return - np.sqrt(obs_next[..., 0]**2 + obs_next[..., 1]**2)
 
+
 class WrapperEnv(gym.core.Wrapper):
 
     def __init__(self, env):
         super().__init__(env)
         self.state = None
-    
+
     def step(self, action):
         state, reward, done, info = self.env.step(action)
         if "TimeLimit.truncated" not in info:
@@ -71,8 +73,9 @@ class WrapperEnv(gym.core.Wrapper):
         self.state = state
         return state
 
+
 class WrapperEnvMountainCar(WrapperEnv):
-    
+
     def reward(self, state, action, state_next):
         reward = self.done(state_next) * 100 - 0.1 * action[..., 0]**2
         return reward
@@ -80,13 +83,16 @@ class WrapperEnvMountainCar(WrapperEnv):
     def done(self, state):
         position = state[..., 0]
         velocity = state[..., 1]
-        done = np.logical_and(position >= self.unwrapped.goal_position, velocity >= self.unwrapped.goal_velocity)
+        done = np.logical_and(position >= self.unwrapped.goal_position,
+                              velocity >= self.unwrapped.goal_velocity)
         return done
+
 
 class WrapperEnvPendulum(WrapperEnv):
 
     def reward(self, state, action, state_next):
-        th = np.sign(np.arcsin(state_next[..., 1])) * np.arccos(state_next[..., 0])
+        th = np.sign(np.arcsin(state_next[..., 1])
+                     ) * np.arccos(state_next[..., 0])
         thdot = state_next[..., 2]
         action = np.clip(action, -self.env.max_torque, self.env.max_torque)[0]
         costs = th**2 + 0.1 * thdot**2 + 0.001 * action**2
@@ -96,6 +102,7 @@ class WrapperEnvPendulum(WrapperEnv):
         if len(state.shape) == 2:
             return np.zeros(state.shape[0], dtype=np.bool_)
         return False
+
 
 class WrapperEnvInvertedPendulum(WrapperEnv):
 
@@ -107,6 +114,7 @@ class WrapperEnvInvertedPendulum(WrapperEnv):
     def done(self, state):
         return np.abs(state[..., 1]) > 0.2
 
+
 class WrapperEnvHalfCheetah(WrapperEnv):
 
     def reward(self, state, action, state_next):
@@ -114,21 +122,25 @@ class WrapperEnvHalfCheetah(WrapperEnv):
         pos_x_next = state_next[..., 0]
         velocity_x = (pos_x_next - pos_x) / self.env.dt
         reward_forward = self.unwrapped._forward_reward_weight * velocity_x
-        cost_ctrl = self.unwrapped._ctrl_cost_weight * np.sum(np.square(action), axis=-1)
+        cost_ctrl = self.unwrapped._ctrl_cost_weight * \
+            np.sum(np.square(action), axis=-1)
         reward = reward_forward - cost_ctrl
         return reward
-    
+
     def done(self, state):
         if len(state.shape) == 2:
             return np.zeros(state.shape[0], dtype=np.bool_)
         return False
 
+
 class EnvModel(gym.core.Env):
 
     def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination, args):
         self.space_observation = space_observation
-        self.bound_state_low = torch.tensor(space_observation.low, dtype=torch.float32, device=args.device)
-        self.bound_state_high = torch.tensor(space_observation.high, dtype=torch.float32, device=args.device)
+        self.bound_state_low = torch.tensor(
+            space_observation.low, dtype=torch.float32, device=args.device)
+        self.bound_state_high = torch.tensor(
+            space_observation.high, dtype=torch.float32, device=args.device)
         self.space_action = space_action
         self.dataset_states_initial = dataset_states_initial
         self.model_reward = model_reward
@@ -141,9 +153,12 @@ class EnvModel(gym.core.Env):
             state_action = np.concatenate((state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, state_next_std = self.model_transition.get_distr(state_action)
-            state_next = torch.distributions.Normal(state_next_mean, state_next_std).sample()
-            state_next = torch.clamp(state_next, self.bound_state_low, self.bound_state_high)
+            state_next_mean, state_next_std = self.model_transition.get_distr(
+                state_action)
+            state_next = torch.distributions.Normal(
+                state_next_mean, state_next_std).sample()
+            state_next = torch.clamp(
+                state_next, self.bound_state_low, self.bound_state_high)
             state_next = state_next.cpu().numpy()
             reward = self.model_reward(state, action, state_next)
             done = self.model_termination(state_next)
@@ -163,7 +178,8 @@ class EnvModel(gym.core.Env):
         for idx_step in range(max_length_rollout):
             action = agent.get_action(state)
             state_next, reward, done, info = self._step(state, action)
-            mask = done.astype(np.float32) # note: termination model has no time limit (which is added via wrapper)
+            # note: termination model has no time limit (which is added via wrapper)
+            mask = done.astype(np.float32)
             batch = list(zip(state, action, reward, state_next, mask))
             dataset.push_batch(batch)
             state = state_next[np.logical_not(done.squeeze())]
@@ -187,7 +203,8 @@ class EnvModel(gym.core.Env):
 class EnvModelHallucinated(EnvModel):
 
     def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination, args, beta=1.):
-        super().__init__(space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination, args)
+        super().__init__(space_observation, space_action, dataset_states_initial,
+                         model_reward, model_transition, model_termination, args)
         self.space_action_hallucinated = gym.spaces.Box(
             low=-1, high=1, shape=space_observation.shape, dtype=np.float32)
         self.beta = beta
@@ -196,15 +213,19 @@ class EnvModelHallucinated(EnvModel):
         with torch.no_grad():
             dim_action = self.space_action.shape[0]
             action_hallucinated = action[:, dim_action:]
+            action_hallucinated = torch.tensor(
+                action_hallucinated, dtype=torch.float32, device=self.device)
             action = action[:, :dim_action]
             state_action = np.concatenate((state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, state_next_std = self.model_transition.get_distr(state_action)
+            state_next_mean, state_next_std = self.model_transition.get_distr(
+                state_action)
             state_next_mean = state_next_mean
-            state_next_var = (state_next_std**2)
+            state_next_var = state_next_std**2
             state_next = state_next_mean + self.beta * state_next_var * action_hallucinated
-            state_next = torch.clamp(state_next, self.bound_state_low, self.bound_state_high)
+            state_next = torch.clamp(
+                state_next, self.bound_state_low, self.bound_state_high)
             state_next = state_next.cpu().numpy()
             reward = self.model_reward(state, action, state_next)
             done = self.model_termination(state_next)
@@ -212,6 +233,8 @@ class EnvModelHallucinated(EnvModel):
 
     @property
     def action_space(self):
-        low = np.concatenate((self.space_action.low, self.space_action_hallucinated.low))
-        high = np.concatenate((self.space_action.high, self.space_action_hallucinated.high))
+        low = np.concatenate(
+            (self.space_action.low, self.space_action_hallucinated.low))
+        high = np.concatenate(
+            (self.space_action.high, self.space_action_hallucinated.high))
         return gym.spaces.Box(low=low, high=high, dtype=np.float32)
