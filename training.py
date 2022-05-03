@@ -39,17 +39,21 @@ def train_ensemble(model, dataset, args):
 
 def train_ensemble_map(model, dataset, args):
     model.train()
+    utils.preprocess(model, dataset)
+    dataloader = utils.get_dataloader(dataset, args.num_steps_train_model, args.size_batch)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    def fn_loss(y_pred_mean, y_pred_std, y_true):
-        loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_true).sum()
-        for parameter in model.parameters():
-            loss -= torch.sum(parameter**2)
+    def fn_loss(y_pred_mean, y_pred_std, y_train):
+        loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum()
+        if args.weight_regularizer_model > 0:
+            distr_standard_normal = torch.distributions.Normal(0,1)
+            for parameter in model.parameters():
+                loss -= args.weight_regularizer_model * distr_standard_normal.log_prob(parameter).sum()
         return loss
-    for idx_step in range(args.num_steps_model):
-        state, action, reward, state_next, done = dataset.sample(args.size_batch)
-        state_action = torch.cat((state, action), dim=-1)
+    for state, action, reward, state_next, done in dataloader:
+        state_action = torch.cat((state, action), dim=-1).to(args.device)
         state_next_means, state_next_stds = model(state_action)
         state_next = state_next.to(args.device)
+        state_next = model.scaler_y.transform(state_next)
         loss = fn_loss(state_next_means, state_next_stds, state_next)
         optimizer.zero_grad()
         loss.backward()

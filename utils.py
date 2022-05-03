@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import torch
 
 def create_log_gaussian(mean, log_std, t):
@@ -38,6 +39,33 @@ def get_dataloader(dataset, num_batches, size_batch, num_workers=2):
         num_workers=num_workers,
     )
     return dataloader
+
+class ScalerStandard():
+    
+    def __init__(self):
+        self.mean = 0.0
+        self.std = 1.0
+
+    def fit(self, data):
+        self.mean = torch.mean(data, dim=0)
+        self.std = torch.std(data, dim=0)
+
+    def transform(self, data):
+        return (data - self.mean) / self.std
+
+    def inverse_transform(self, data_mean, data_std):
+        mean = self.mean + data_mean * self.std
+        std = data_std * self.std
+        return mean, std
+
+
+def preprocess(model, dataset):
+    state, action, _, state_next, _ = dataset.sample(len(dataset), replacement=False)
+    state_action = np.concatenate((state, action), axis=-1)
+    state_action = torch.tensor(state_action, dtype=torch.float32)
+    state_next = torch.tensor(state_next, dtype=torch.float32)
+    model.scaler_x.fit(state_action)
+    model.scaler_y.fit(state_next)
     
 
 class Wrapper:

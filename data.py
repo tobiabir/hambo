@@ -18,8 +18,11 @@ class DatasetNumpy(torch.utils.data.Dataset):
     def append(self, x):
         self.data.append(x)
 
-    def sample(self, num):
-        batch = random.choices(self.data, k=num)
+    def sample(self, num, replacement=True):
+        if replacement:
+            batch = random.choices(self.data, k=num)
+        else:
+            batch = random.sample(self.data, k=num)
         batch = np.stack(batch)
         return batch
 
@@ -66,8 +69,11 @@ class DatasetSARS(torch.utils.data.Dataset):
             self.data[:len(batch) - len(self.data) + self.pos] = batch[len(self.data) - self.pos:]
             self.pos = len(batch) - len(self.data) + self.pos
 
-    def sample(self, num):
-        batch = random.choices(self.data, k=num)
+    def sample(self, num, replacement=True):
+        if replacement:
+            batch = random.choices(self.data, k=num)
+        else:
+            batch = random.sample(self.data, k=num)
         batch = tuple(map(np.stack, zip(*batch)))
         return batch 
 

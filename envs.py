@@ -153,8 +153,8 @@ class EnvModel(gym.core.Env):
             state_action = np.concatenate((state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, state_next_std = self.model_transition.get_distr(
-                state_action)
+            state_next_mean, _, state_next_std = self.model_transition.get_distr(
+                state_action, epistemic=True)
             state_next = torch.distributions.Normal(
                 state_next_mean, state_next_std).sample()
             state_next = torch.clamp(

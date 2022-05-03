@@ -1,6 +1,8 @@
 import math
 import torch
 
+import utils
+
 STD_LOG_MIN = -20
 STD_LOG_MAX = 2
 EPS = 1e-6
@@ -40,16 +42,22 @@ class NetDense(torch.nn.Module):
             self.layers.append(LayerLinear(dim_h, dim_h, size_ensemble))
             self.layers.append(torch.nn.ReLU())
         self.layers.append(LayerLinear(dim_h, dim_y, size_ensemble))
+        self.scaler_x = utils.ScalerStandard()
+        self.scaler_y = utils.ScalerStandard()
 
     def forward(self, x):
+        x = self.scaler_x.transform(x)
         x = x.repeat(self.size_ensemble, 1, 1)
         y = self.layers(x).squeeze(dim=1)
-        return y
+        return y, 1.0
 
-    def get_distr(self, x):
-        y = self(x)
+    def get_distr(self, x, epistemic=False):
+        y, _ = self(x)
         mean = torch.mean(y, dim=0)
         std = torch.std(y, dim=0)
+        mean, std = self.scaler_y.inverse_transform(mean, std)
+        if epistemic:
+            return mean, std, std
         return mean, std
 
 class NetGaussHomo(torch.nn.Module):
@@ -61,23 +69,35 @@ class NetGaussHomo(torch.nn.Module):
         self.stds_log = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, 1,dim_y)))
         torch.nn.init.kaiming_uniform_(self.stds_log, a=math.sqrt(5))
 
+    @property
+    def scaler_x(self):
+        return self.net.scaler_x
+
+    @property
+    def scaler_y(self):
+        return self.net.scaler_y
+
     def forward(self, x):
-        means = self.net(x)
+        means, _ = self.net(x)
         stds_log = torch.clamp(self.stds_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
         if len(means.shape) == 2:
             stds_log = stds_log.squeeze(dim=1)
         stds = stds_log.exp()
         return means, stds
 
-    def get_distr(self, x):
+    def get_distr(self, x, epistemic=False):
         means, stds = self(x)
         mean = torch.mean(means, dim=0)
-        #var_aleatoric = torch.mean(stds**2, dim=0)
-        #var_epistemic = torch.var(means, dim=0)
-        #var = var_aleatoric + var_epistemic
-        #std = torch.sqrt(var)
-        std_epistemic = torch.std(means, dim=0)
-        return mean, std_epistemic
+        var_aleatoric = torch.mean(stds**2, dim=0)
+        var_epistemic = torch.var(means, dim=0)
+        var = var_aleatoric + var_epistemic
+        std = torch.sqrt(var)
+        mean, std = self.scaler_y.inverse_transform(mean, std)
+        if epistemic:
+            std_epistemic = torch.sqrt(var_epistemic)
+            _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
+            return mean, std, std_epistemic
+        return mean, std
 
 class NetGauss(torch.nn.Module):
 

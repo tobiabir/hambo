@@ -23,12 +23,16 @@ if __name__ == "__main__":
                         help="id of the experiment")
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
+    parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilistic"], default="EnsembleProbabilistic",
+                        help="what type of model to use to learn dyamics of the environment")
+    parser.add_argument("--weight_regularizer_model", type=float, default=0.0,
+                        help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
     parser.add_argument("--hallucinate", default=False, action="store_true",
                         help="set to add hallucinated control (default: False)")
     parser.add_argument("--tau", type=float, default=0.005,
                         help="target smoothing coefficient (default: 0.005)")
     parser.add_argument("--alpha", type=float, default=0.05,
-                        help="regularizer weight alpha (default: 0.05)")
+                        help="regularizer weight alpha of the entropy regularization term for sac training (default: 0.05)")
     parser.add_argument("--learn_alpha", default=False, action="store_true",
                         help="set to learn alpha (default: False)")
     parser.add_argument("--lr", type=float, default=0.0003,
@@ -100,7 +104,13 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     state = env.reset(seed=args.seed)
     
-    model = nets.NetDense(
+    if args.model == "GP":
+        Model = None # TODO
+    elif args.model == "EnsembleDeterministic":
+        Model = nets.NetDense
+    elif args.model == "EnsembleProbabilistic":
+        Model = nets.NetGaussHomo
+    model = Model(
         dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
         dim_y=env.observation_space.shape[0],
         num_h=2,
@@ -133,7 +143,7 @@ if __name__ == "__main__":
             state = env.reset()
         dataset_states_initial.append(state)
         if (idx_step + 1) % args.interval_train == 0:
-            training.train_ensemble(model, dataset, args)
+            training.train_ensemble_map(model, dataset, args)
             model.eval()
             env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done, args)
             env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
