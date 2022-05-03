@@ -39,7 +39,7 @@ def train_ensemble(model, dataset, args):
 
 def train_ensemble_map(model, dataset, args):
     model.train()
-    utils.preprocess(model, dataset)
+    utils.preprocess(model, dataset, args.device)
     dataloader = utils.get_dataloader(dataset, args.num_steps_train_model, args.size_batch)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     def fn_loss(y_pred_mean, y_pred_std, y_train):

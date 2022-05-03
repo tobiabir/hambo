@@ -59,11 +59,11 @@ class ScalerStandard():
         return mean, std
 
 
-def preprocess(model, dataset):
+def preprocess(model, dataset, device="cpu"):
     state, action, _, state_next, _ = dataset.sample(len(dataset), replacement=False)
     state_action = np.concatenate((state, action), axis=-1)
-    state_action = torch.tensor(state_action, dtype=torch.float32)
-    state_next = torch.tensor(state_next, dtype=torch.float32)
+    state_action = torch.tensor(state_action, dtype=torch.float32, device=device)
+    state_next = torch.tensor(state_next, dtype=torch.float32, device=device)
     model.scaler_x.fit(state_action)
     model.scaler_y.fit(state_next)
     
