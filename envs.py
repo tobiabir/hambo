@@ -219,9 +219,8 @@ class EnvModelHallucinated(EnvModel):
             state_action = np.concatenate((state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, state_next_std = self.model_transition.get_distr(
-                state_action)
-            state_next_mean = state_next_mean
+            state_next_mean, _, state_next_std = self.model_transition.get_distr(
+                state_action, epistemic=True)
             state_next_var = state_next_std**2
             state_next = state_next_mean + self.beta * state_next_var * action_hallucinated
             state_next = torch.clamp(
