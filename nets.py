@@ -49,15 +49,20 @@ class NetDense(torch.nn.Module):
         x = self.scaler_x.transform(x)
         x = x.repeat(self.size_ensemble, 1, 1)
         y = self.layers(x).squeeze(dim=1)
-        return y, 1.0
+        return y, torch.tensor(1.0, dtype=torch.float32, device=y.device)
 
     def get_distr(self, x, epistemic=False):
-        y, _ = self(x)
-        mean = torch.mean(y, dim=0)
-        std = torch.std(y, dim=0)
+        means, stds = self(x)
+        mean = torch.mean(means, dim=0)
+        var_aleatoric = torch.mean(stds**2, dim=0)
+        var_epistemic = torch.var(means, dim=0)
+        var = var_aleatoric + var_epistemic
+        std = torch.sqrt(var)
         mean, std = self.scaler_y.inverse_transform(mean, std)
         if epistemic:
-            return mean, std, std
+            std_epistemic = torch.sqrt(var_epistemic)
+            _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
+            return mean, std, std_epistemic
         return mean, std
 
 class NetGaussHomo(torch.nn.Module):

@@ -146,6 +146,7 @@ class EnvModel(gym.core.Env):
         self.model_reward = model_reward
         self.model_transition = model_transition
         self.model_termination = model_termination
+        self.use_aleatoric = args.use_aleatoric
         self.device = args.device
 
     def _step(self, state, action):
@@ -153,10 +154,11 @@ class EnvModel(gym.core.Env):
             state_action = np.concatenate((state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, _, state_next_std = self.model_transition.get_distr(
-                state_action, epistemic=True)
-            state_next = torch.distributions.Normal(
-                state_next_mean, state_next_std).sample()
+            state_next_mean, state_next_std, state_next_std_epistemic = self.model_transition.get_distr(state_action, epistemic=True)
+            if self.use_aleatoric:
+                state_next = torch.distributions.Normal(state_next_mean, state_next_std).sample()
+            else:
+                state_next = torch.distributions.Normal(state_next_mean, state_next_std_epistemic).sample()
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
             state_next = state_next.cpu().numpy()
@@ -219,10 +221,15 @@ class EnvModelHallucinated(EnvModel):
             state_action = np.concatenate((state, action), axis=-1)
             state_action = torch.tensor(
                 state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, _, state_next_std = self.model_transition.get_distr(
+            state_next_mean, state_next_std, state_next_epistemic = self.model_transition.get_distr(
                 state_action, epistemic=True)
-            state_next_var = state_next_std**2
-            state_next = state_next_mean + self.beta * state_next_var * action_hallucinated
+            state_next_var_epistemic = state_next_std_epistemic**2
+            state_next = state_next_mean + self.beta * state_next_var_epistemic * action_hallucinated
+            if self.use_aleatoric:
+                state_next_var = state_next_std**2
+                state_next_var_aleatoric = state_next_var - state_next_var_epistemic
+                state_next_std_aleatoric = torch.sqrt(state_next_var_aleatoric)
+                state_next = torch.distributions.Normal(state_next, state_next_std_aleatoric).sample()
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
             state_next = state_next.cpu().numpy()

@@ -6,13 +6,14 @@ import os
 import random
 import time
 import torch
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 import agents
 import data
 import envs
 import evaluation
 import training
+import utils
 
 if __name__ == "__main__":
 
@@ -50,12 +51,15 @@ if __name__ == "__main__":
     parser.add_argument("--replay_size", type=int, default=100000,
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
+    args.algorithm = "SAC"
     if args.device is None:
         if torch.cuda.is_available():
             args.device = "cuda"
         else:
             args.device = "cpu"
     print(f"device: {args.device}")
+
+    wandb.init(project="Master Thesis", entity="tobiabir", config=args)
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
@@ -74,19 +78,10 @@ if __name__ == "__main__":
         env = gym.make("HalfCheetah-v3", exclude_current_positions_from_observation=False)
         env = envs.WrapperEnvHalfCheetah(env)
 
-    if args.id_experiment is not None:
-        dir_log = os.path.join("Logs", "Training")
-        dir_log = os.path.join(dir_log, args.name_env)
-        dir_log = os.path.join(dir_log, args.id_experiment)
-        writer = SummaryWriter(log_dir=dir_log)
-        args.writer = writer
     args.idx_step_agent_global = 0
 
     # setting rng seeds
-    random.seed(args.seed)    
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    env.reset(seed=args.seed)
+    utils.set_seeds(args.seed)
     
     agent = agents.AgentSAC(env.observation_space, env.action_space, args)
 

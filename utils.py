@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import random
 import torch
 
 def create_log_gaussian(mean, log_std, t):
@@ -28,6 +29,13 @@ def soft_update(target, source, tau):
 def hard_update(target, source):
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(param.data)
+
+def set_seeds(seed):
+    torch.backends.cudnn.deterministic = True
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def get_dataloader(dataset, num_batches, size_batch, num_workers=2):
     num_samples = num_batches * size_batch

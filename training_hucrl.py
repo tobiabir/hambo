@@ -5,7 +5,7 @@ import numpy as np
 import os
 import random
 import torch
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 import agents
 import data
@@ -13,6 +13,7 @@ import envs
 import evaluation
 import nets
 import training
+import utils
 
 if __name__ == "__main__":
 
@@ -24,9 +25,11 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
     parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilistic"], default="EnsembleProbabilistic",
-                        help="what type of model to use to learn dyamics of the environment")
+                        help="what type of model to use to learn dyamics of the environment (default: EnsembleProbabilistic)")
     parser.add_argument("--weight_regularizer_model", type=float, default=0.0,
                         help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
+    parser.add_argument("--use_aleatoric", default=False, action="store_true",
+                        help="set to use aleatoric noise from transition model (default: False)")
     parser.add_argument("--hallucinate", default=False, action="store_true",
                         help="set to add hallucinated control (default: False)")
     parser.add_argument("--tau", type=float, default=0.005,
@@ -64,12 +67,18 @@ if __name__ == "__main__":
     parser.add_argument("--replay_size", type=int, default=100000,
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
+    if args.hallucinate:
+        args.algorithm = "HMBSAC"
+    else:
+        args.algorithm = "MBSAC"
     if args.device is None:
         if torch.cuda.is_available():
             args.device = "cuda"
         else:
             args.device = "cpu"
     print(f"device: {args.device}")
+
+    wandb.init(project="Master Thesis", entity="tobiabir", config=args)
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
@@ -90,19 +99,10 @@ if __name__ == "__main__":
 
     dim_action = env.action_space.shape[0]
     
-    if args.id_experiment is not None:
-        dir_log = os.path.join("Logs", "Training")
-        dir_log = os.path.join(dir_log, args.name_env)
-        dir_log = os.path.join(dir_log, args.id_experiment)
-        writer = SummaryWriter(log_dir=dir_log)
-        args.writer = writer
     args.idx_step_agent_global = 0
 
     # setting rng seeds
-    random.seed(args.seed)    
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    state = env.reset(seed=args.seed)
+    utils.set_seeds(args.seed)
     
     if args.model == "GP":
         Model = None # TODO
@@ -130,6 +130,8 @@ if __name__ == "__main__":
     dataset = data.DatasetSARS(capacity=args.replay_size)
     dataset_agent = data.DatasetSARS(capacity=args.replay_size)
     dataset_states_initial = data.DatasetNumpy()
+
+    state = env.reset()
     dataset_states_initial.append(state)
 
     for idx_step in range(args.num_steps):
@@ -152,7 +154,6 @@ if __name__ == "__main__":
         if (idx_step + 1) % args.interval_eval == 0:
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)
-            if args.id_experiment is not None:
-                writer.add_scalar("reward", reward_avg, idx_step + 1) 
+            wandb.log({"reward": reward_avg, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, reward: {reward_avg}")
 
