@@ -26,6 +26,12 @@ if __name__ == "__main__":
                         help="discount factor for reward (default: 0.99)")
     parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilistic"], default="EnsembleProbabilistic",
                         help="what type of model to use to learn dyamics of the environment (default: EnsembleProbabilistic)")
+    parser.add_argument("--num_h_model", type=int, default=2,
+                        help="number of hidden layers in model (only for ensembles) (default: 2)")
+    parser.add_argument("--dim_h_model", type=int, default=256,
+                        help="dimension of hidden layers in model (only for ensembles) (default: 256)")
+    parser.add_argument("--size_ensemble_model", type=int, default=7,
+                        help="number of networks in model (only for ensembles) (default: 7)")
     parser.add_argument("--weight_regularizer_model", type=float, default=0.0,
                         help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
@@ -79,7 +85,7 @@ if __name__ == "__main__":
             args.device = "cpu"
     print(f"device: {args.device}")
 
-    wandb.init(project="Master Thesis", entity="tobiabir", config=args)
+    wandb.init(mode="disabled", project="Master Thesis", entity="tobiabir", config=args)
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
@@ -114,9 +120,9 @@ if __name__ == "__main__":
     model = Model(
         dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
         dim_y=1 + env.observation_space.shape[0],
-        num_h=2,
-        dim_h=256,
-        size_ensemble=7
+        num_h=args.num_h_model,
+        dim_h=args.dim_h_model,
+        size_ensemble=args.size_ensemble_model
     ).to(args.device)
     if args.hallucinate:
         EnvModel = envs.EnvModelHallucinated
