@@ -135,7 +135,7 @@ class WrapperEnvHalfCheetah(WrapperEnv):
 
 class EnvModel(gym.core.Env):
 
-    def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination, args):
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args):
         self.space_observation = space_observation
         self.bound_state_low = torch.tensor(
             space_observation.low, dtype=torch.float32, device=args.device)
@@ -143,7 +143,6 @@ class EnvModel(gym.core.Env):
             space_observation.high, dtype=torch.float32, device=args.device)
         self.space_action = space_action
         self.dataset_states_initial = dataset_states_initial
-        self.model_reward = model_reward
         self.model_transition = model_transition
         self.model_termination = model_termination
         self.use_aleatoric = args.use_aleatoric
@@ -151,18 +150,19 @@ class EnvModel(gym.core.Env):
 
     def _step(self, state, action):
         with torch.no_grad():
-            state_action = np.concatenate((state, action), axis=-1)
-            state_action = torch.tensor(
-                state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, state_next_std, state_next_std_epistemic = self.model_transition.get_distr(state_action, epistemic=True)
+            x = np.concatenate((state, action), axis=-1)
+            x = torch.tensor(x, dtype=torch.float32, device=self.device)
+            y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
             if self.use_aleatoric:
-                state_next = torch.distributions.Normal(state_next_mean, state_next_std).sample()
+                y = torch.distributions.Normal(y_mean, y_std).sample()
             else:
-                state_next = torch.distributions.Normal(state_next_mean, state_next_std_epistemic).sample()
+                y = torch.distributions.Normal(y_mean, y_std_epistemic).sample()
+            reward = y[:, :1]
+            state_next = y[:, 1:]
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
+            reward = reward.squeeze().cpu().numpy()
             state_next = state_next.cpu().numpy()
-            reward = self.model_reward(state, action, state_next)
             done = self.model_termination(state_next)
             return state_next, reward, done, {}
 
@@ -204,9 +204,9 @@ class EnvModel(gym.core.Env):
 
 class EnvModelHallucinated(EnvModel):
 
-    def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination, args, beta=1.):
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args, beta=1.):
         super().__init__(space_observation, space_action, dataset_states_initial,
-                         model_reward, model_transition, model_termination, args)
+                         model_transition, model_termination, args)
         self.space_action_hallucinated = gym.spaces.Box(
             low=-1, high=1, shape=space_observation.shape, dtype=np.float32)
         self.beta = beta
@@ -218,22 +218,29 @@ class EnvModelHallucinated(EnvModel):
             action_hallucinated = torch.tensor(
                 action_hallucinated, dtype=torch.float32, device=self.device)
             action = action[:, :dim_action]
-            state_action = np.concatenate((state, action), axis=-1)
-            state_action = torch.tensor(
-                state_action, dtype=torch.float32, device=self.device)
-            state_next_mean, state_next_std, state_next_epistemic = self.model_transition.get_distr(
-                state_action, epistemic=True)
+            x = np.concatenate((state, action), axis=-1)
+            x = torch.tensor(x, dtype=torch.float32, device=self.device)
+            y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
+            reward_mean = y_mean[:, :1]
+            reward_std = y_std[:, :1]
+            reward_std_epistemic = y_std_epistemic[:, :1]
+            state_next_mean = y_mean[:, 1:]
+            state_next_std = y_std[:, 1:]
+            state_next_std_epistemic = y_std_epistemic[:, 1:]
             state_next_var_epistemic = state_next_std_epistemic**2
             state_next = state_next_mean + self.beta * state_next_var_epistemic * action_hallucinated
             if self.use_aleatoric:
+                reward = torch.distributions.Normal(reward_mean, reward_std).sample()
                 state_next_var = state_next_std**2
                 state_next_var_aleatoric = state_next_var - state_next_var_epistemic
                 state_next_std_aleatoric = torch.sqrt(state_next_var_aleatoric)
                 state_next = torch.distributions.Normal(state_next, state_next_std_aleatoric).sample()
+            else:
+                reward = torch.distributions.Normal(reward_mean, reward_std_epistemic).sample()
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
+            reward = reward.squeeze().cpu().numpy()
             state_next = state_next.cpu().numpy()
-            reward = self.model_reward(state, action, state_next)
             done = self.model_termination(state_next)
             return state_next, reward, done, {}
 

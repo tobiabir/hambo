@@ -68,13 +68,14 @@ class ScalerStandard():
 
 
 def preprocess(model, dataset, device="cpu"):
-    state, action, _, state_next, _ = dataset.sample(len(dataset), replacement=False)
-    state_action = np.concatenate((state, action), axis=-1)
-    state_action = torch.tensor(state_action, dtype=torch.float32, device=device)
-    state_next = torch.tensor(state_next, dtype=torch.float32, device=device)
-    model.scaler_x.fit(state_action)
-    model.scaler_y.fit(state_next)
-    
+    state, action, reward, state_next, _ = dataset.sample(len(dataset), replacement=False)
+    x = np.concatenate((state, action), axis=-1)
+    x = torch.tensor(x, dtype=torch.float32, device=device)
+    y = np.concatenate((reward, state_next), axis=-1)
+    y = torch.tensor(y, dtype=torch.float32, device=device)
+    model.scaler_x.fit(x)
+    model.scaler_y.fit(y)
+
 
 class Wrapper:
       

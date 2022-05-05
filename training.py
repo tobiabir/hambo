@@ -51,11 +51,11 @@ def train_ensemble_map(model, dataset, args):
                 loss -= args.weight_regularizer_model * distr_standard_normal.log_prob(parameter).sum()
         return loss
     for state, action, reward, state_next, done in dataloader:
-        state_action = torch.cat((state, action), dim=-1).to(args.device)
-        state_next_means, state_next_stds = model(state_action)
-        state_next = state_next.to(args.device)
-        state_next = model.scaler_y.transform(state_next)
-        loss = fn_loss(state_next_means, state_next_stds, state_next)
+        x = torch.cat((state, action), dim=-1).to(args.device)
+        y_pred_means, y_pred_stds = model(x)
+        y = torch.cat((reward, state_next), dim=-1).to(args.device)
+        y = model.scaler_y.transform(y)
+        loss = fn_loss(y_pred_means, y_pred_stds, y)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()

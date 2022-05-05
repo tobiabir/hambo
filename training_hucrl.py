@@ -71,6 +71,7 @@ if __name__ == "__main__":
         args.algorithm = "HMBSAC"
     else:
         args.algorithm = "MBSAC"
+    args.use_true_reward = False
     if args.device is None:
         if torch.cuda.is_available():
             args.device = "cuda"
@@ -112,7 +113,7 @@ if __name__ == "__main__":
         Model = nets.NetGaussHomo
     model = Model(
         dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
-        dim_y=env.observation_space.shape[0],
+        dim_y=1 + env.observation_space.shape[0],
         num_h=2,
         dim_h=256,
         size_ensemble=7
@@ -121,7 +122,7 @@ if __name__ == "__main__":
         EnvModel = envs.EnvModelHallucinated
     else:
         EnvModel = envs.EnvModel
-    env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model, env.done, args)
+    env_model = EnvModel(env.observation_space, env.action_space, None, model, env.done, args)
     env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
     env_model = envs.WrapperEnv(env_model)
 
@@ -147,7 +148,7 @@ if __name__ == "__main__":
         if (idx_step + 1) % args.interval_train == 0:
             training.train_ensemble_map(model, dataset, args)
             model.eval()
-            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done, args)
+            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
             env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
             env_model = envs.WrapperEnv(env_model)
             training.train_sac(agent, env_model, dataset_agent, args)

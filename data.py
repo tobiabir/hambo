@@ -74,6 +74,8 @@ class DatasetSARS(torch.utils.data.Dataset):
             batch = random.choices(self.data, k=num)
         else:
             batch = random.sample(self.data, k=num)
-        batch = tuple(map(np.stack, zip(*batch)))
+        batch = list(map(np.stack, zip(*batch)))
+        batch[2] = np.expand_dims(batch[2], axis=-1)
+        batch[4] = np.expand_dims(batch[4], axis=-1)
         return batch 
 
