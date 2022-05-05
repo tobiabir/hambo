@@ -115,6 +115,16 @@ class WrapperEnvInvertedPendulum(WrapperEnv):
         return np.abs(state[..., 1]) > 0.2
 
 
+class WrapperEnvHopper(WrapperEnv):
+
+    def done(self, state):
+        height = state[..., 0]
+        angle = state[..., 0]
+        not_done = np.isfinite(state).all(axis=-1) * np.abs(state[..., 1:] < 100).all(axis=-1) * (height > 0.7) * (np.abs(angle) < 0.2)
+        done = ~not_done
+        return done
+
+
 class WrapperEnvHalfCheetah(WrapperEnv):
 
     def reward(self, state, action, state_next):
