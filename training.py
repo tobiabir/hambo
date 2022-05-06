@@ -61,19 +61,19 @@ def train_ensemble_map(model, dataset, args):
         optimizer.step()
     return model
         
-def train_sac(agent, env, dataset, args):
+def train_sac(agent, env, dataset, args, idx_step_start=0):
     if "interval_eval_agent" in args:
-        num_samples = np.gcd(args.interval_train_agent, args.interval_eval_agent)
+        num_samples = np.gcd(args.interval_train_agent_internal, args.interval_eval_agent)
     else:
         num_samples = args.interval_train_agent
     env.reset()
-    idx_step = 0
+    idx_step = idx_step_start
     while idx_step < args.num_steps_agent:
         agent.train()
         if hasattr(env, "rollout"):
             env.rollout(agent, dataset, num_samples, args.num_steps_rollout_model)
         else:
-            rollout.rollout_steps(env, agent, dataset, num_samples)
+            rollout.rollout_steps(env, agent, dataset, None, num_samples)
         idx_step += num_samples
         args.idx_step_agent_global += num_samples
         if idx_step % args.interval_train_agent_internal == 0:

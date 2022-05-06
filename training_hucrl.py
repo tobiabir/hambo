@@ -54,8 +54,10 @@ if __name__ == "__main__":
                         help="batch size (default: 256)")
     parser.add_argument("--num_steps", type=int, default=4096,
                         help="number of steps (default: 4096)")
-    parser.add_argument("--num_steps_startup", type=int, default=128,
-                        help="number of steps to do randomly before any training starts (note: should be multiple and greater or equal to interval_train_model) (default: 128)")
+    parser.add_argument("--num_steps_rollout_startup", type=int, default=128,
+                        help="number of steps of rollout to do during startup (default: 128)")
+    parser.add_argument("--num_steps_train_startup", type=int, default=128,
+                        help="number of steps of training to do during startup (default: 128)")
     parser.add_argument("--interval_train_model", type=int, default=128,
                         help="interval of steps after which a round of training is done (default: 128)")
     parser.add_argument("--num_steps_train_model", type=int, default=512,
@@ -89,9 +91,6 @@ if __name__ == "__main__":
         else:
             args.device = "cpu"
     print(f"device: {args.device}")
-
-    assert args.interval_train_model <= args.num_steps_startup, "args.num_steps_startup must be greater or equal to args.interval_train_model"
-    assert args.num_steps_startup % args.interval_train_model == 0, "args.num_steps_startup must be a multiple of args.interval_train_model"
 
     wandb.init(project="Master Thesis", entity="tobiabir", config=args)
 
@@ -153,12 +152,12 @@ if __name__ == "__main__":
     state = env.reset()
     dataset_states_initial.append(state)
 
-    for idx_step in range(args.num_steps):
+    utils.startup(env, agent, dataset, dataset_states_initial, args.num_steps_rollout_startup, args.num_steps_train_startup, args.size_batch) 
+    args.idx_step_agent_global += args.num_steps_rollout_startup
+
+    for idx_step in range(args.num_steps_rollout_startup, args.num_steps):
         agent.train()
-        if idx_step < args.num_steps_startup:
-            action = agent_random.get_action(state)
-        else:
-            action = agent.get_action(state)[:dim_action]
+        action = agent.get_action(state)[:dim_action]
         state_next, reward, done, info = env.step(action)
         mask = float(done and not info["TimeLimit.truncated"]) 
         dataset.push(state, action, reward, state_next, mask)
@@ -166,15 +165,15 @@ if __name__ == "__main__":
         if done:
             state = env.reset()
         dataset_states_initial.append(state)
-        if args.num_steps_startup <= (idx_step + 1) and (idx_step + 1) % args.interval_train_model == 0:
+        if (idx_step + 1) % args.interval_train_model == 0:
             training.train_ensemble_map(model, dataset, args)
-        if args.num_steps_startup <= (idx_step + 1) and (idx_step + 1) % args.interval_train_agent == 0:
+        if (idx_step + 1) % args.interval_train_agent == 0:
             model.eval()
             env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done, args)
             env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
             env_model = envs.WrapperEnv(env_model)
             training.train_sac(agent, env_model, dataset_agent, args)
-        if args.num_steps_startup <= (idx_step + 1) and (idx_step + 1) % args.interval_eval == 0:
+        if (idx_step + 1) % args.interval_eval == 0:
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)
             wandb.log({"reward": reward_avg, "idx_step": idx_step})

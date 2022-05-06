@@ -3,6 +3,9 @@ import numpy as np
 import random
 import torch
 
+import agents
+import rollout
+
 def create_log_gaussian(mean, log_std, t):
     quadratic = -((0.5 * (t - mean) / (log_std.exp())).pow(2))
     l = mean.shape
@@ -47,6 +50,15 @@ def get_dataloader(dataset, num_batches, size_batch, num_workers=2):
         num_workers=num_workers,
     )
     return dataloader
+
+def startup(env, agent, dataset, dataset_states_initial, num_steps_rollout, num_steps_train, size_batch):
+    if num_steps_rollout <= 0:
+        return
+    agent_random = agents.AgentRandom(env.action_space)
+    rollout.rollout_steps(env, agent_random, dataset, dataset_states_initial, num_steps_rollout)
+    dataloader = get_dataloader(dataset, num_steps_train, size_batch)
+    for batch in dataloader:
+        agent.step(batch)
 
 class ScalerStandard():
     
