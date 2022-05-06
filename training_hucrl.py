@@ -34,6 +34,8 @@ if __name__ == "__main__":
                         help="number of networks in model (only for ensembles) (default: 7)")
     parser.add_argument("--weight_regularizer_model", type=float, default=0.0,
                         help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
+    parser.add_argument("--use_true_reward", default=False, action="store_true",
+                        help="set to use true reward instead of learned by model (default: False)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
                         help="set to use aleatoric noise from transition model (default: False)")
     parser.add_argument("--hallucinate", default=False, action="store_true",
@@ -52,7 +54,9 @@ if __name__ == "__main__":
                         help="batch size (default: 256)")
     parser.add_argument("--num_steps", type=int, default=4096,
                         help="number of steps (default: 4096)")
-    parser.add_argument("--interval_train", type=int, default=128,
+    parser.add_argument("--num_steps_startup", type=int, default=128,
+                        help="number of steps to do randomly before any training starts (note: should be multiple and greater or equal to interval_train_model) (default: 128)")
+    parser.add_argument("--interval_train_model", type=int, default=128,
                         help="interval of steps after which a round of training is done (default: 128)")
     parser.add_argument("--num_steps_train_model", type=int, default=512,
                         help="number of steps to train model per iteration (default: 512)")
@@ -64,6 +68,8 @@ if __name__ == "__main__":
                         help="interval of steps after which a round of training is done for agent (default: 128)")
     parser.add_argument("--num_steps_train_agent", type=int, default=128,
                         help="number of steps to train agent per iteration (default: 128)")
+    parser.add_argument("--interval_train_agent_internal", type=int, default=128,
+                        help="interval of steps (from model env) after which a round of training is done for agent (default: 128)")
     parser.add_argument("--interval_eval", type=int, default=128,
                         help="interval of steps after which a round of evaluation is done (default: 128)")
     parser.add_argument("--num_episodes_eval", type=int, default=1,
@@ -77,13 +83,15 @@ if __name__ == "__main__":
         args.algorithm = "HMBSAC"
     else:
         args.algorithm = "MBSAC"
-    args.use_true_reward = False
     if args.device is None:
         if torch.cuda.is_available():
             args.device = "cuda"
         else:
             args.device = "cpu"
     print(f"device: {args.device}")
+
+    assert args.interval_train_model <= args.num_steps_startup, "args.num_steps_startup must be greater or equal to args.interval_train_model"
+    assert args.num_steps_startup % args.interval_train_model == 0, "args.num_steps_startup must be a multiple of args.interval_train_model"
 
     wandb.init(project="Master Thesis", entity="tobiabir", config=args)
 
@@ -131,10 +139,11 @@ if __name__ == "__main__":
         EnvModel = envs.EnvModelHallucinated
     else:
         EnvModel = envs.EnvModel
-    env_model = EnvModel(env.observation_space, env.action_space, None, model, env.done, args)
+    env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model, env.done, args)
     env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
     env_model = envs.WrapperEnv(env_model)
 
+    agent_random = agents.AgentRandom(env.action_space)
     agent = agents.AgentSAC(env_model.observation_space, env_model.action_space, args)
 
     dataset = data.DatasetSARS(capacity=args.replay_size)
@@ -146,7 +155,10 @@ if __name__ == "__main__":
 
     for idx_step in range(args.num_steps):
         agent.train()
-        action = agent.get_action(state)[:dim_action]
+        if idx_step < args.num_steps_startup:
+            action = agent_random.get_action(state)
+        else:
+            action = agent.get_action(state)[:dim_action]
         state_next, reward, done, info = env.step(action)
         mask = float(done and not info["TimeLimit.truncated"]) 
         dataset.push(state, action, reward, state_next, mask)
@@ -154,14 +166,15 @@ if __name__ == "__main__":
         if done:
             state = env.reset()
         dataset_states_initial.append(state)
-        if (idx_step + 1) % args.interval_train == 0:
+        if args.num_steps_startup <= (idx_step + 1) and (idx_step + 1) % args.interval_train_model == 0:
             training.train_ensemble_map(model, dataset, args)
+        if args.num_steps_startup <= (idx_step + 1) and (idx_step + 1) % args.interval_train_agent == 0:
             model.eval()
-            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
+            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done, args)
             env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
             env_model = envs.WrapperEnv(env_model)
             training.train_sac(agent, env_model, dataset_agent, args)
-        if (idx_step + 1) % args.interval_eval == 0:
+        if args.num_steps_startup <= (idx_step + 1) and (idx_step + 1) % args.interval_eval == 0:
             env_eval = copy.deepcopy(env)
             reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)
             wandb.log({"reward": reward_avg, "idx_step": idx_step})

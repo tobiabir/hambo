@@ -38,7 +38,7 @@ if __name__ == "__main__":
                         help="batch size (default: 256)")
     parser.add_argument("--num_steps_agent", type=int, default=4096,
                         help="number of steps (default: 4096)")
-    parser.add_argument("--interval_train_agent", type=int, default=128,
+    parser.add_argument("--interval_train_agent_internal", type=int, default=128,
                         help="training round interval in steps (default: 128)")
     parser.add_argument("--num_steps_train_agent", type=int, default=128,
                         help="number of steps (default: 128)")

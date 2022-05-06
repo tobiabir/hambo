@@ -117,6 +117,9 @@ class WrapperEnvInvertedPendulum(WrapperEnv):
 
 class WrapperEnvHopper(WrapperEnv):
 
+    def reward(self, state, action, state_next):
+        raise NotImplementedError
+
     def done(self, state):
         height = state[..., 0]
         angle = state[..., 0]
@@ -145,7 +148,7 @@ class WrapperEnvHalfCheetah(WrapperEnv):
 
 class EnvModel(gym.core.Env):
 
-    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args):
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination, args):
         self.space_observation = space_observation
         self.bound_state_low = torch.tensor(
             space_observation.low, dtype=torch.float32, device=args.device)
@@ -153,8 +156,10 @@ class EnvModel(gym.core.Env):
             space_observation.high, dtype=torch.float32, device=args.device)
         self.space_action = space_action
         self.dataset_states_initial = dataset_states_initial
+        self.model_reward = model_reward
         self.model_transition = model_transition
         self.model_termination = model_termination
+        self.use_true_reward = args.use_true_reward
         self.use_aleatoric = args.use_aleatoric
         self.device = args.device
 
@@ -173,6 +178,8 @@ class EnvModel(gym.core.Env):
                 state_next, self.bound_state_low, self.bound_state_high)
             reward = reward.squeeze().cpu().numpy()
             state_next = state_next.cpu().numpy()
+            if self.use_true_reward:
+                reward = self.model_reward(state, action, state_next)
             done = self.model_termination(state_next)
             return state_next, reward, done, {}
 
@@ -214,9 +221,9 @@ class EnvModel(gym.core.Env):
 
 class EnvModelHallucinated(EnvModel):
 
-    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args, beta=1.):
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_reward, model_transition, model_termination, args, beta=1.):
         super().__init__(space_observation, space_action, dataset_states_initial,
-                         model_transition, model_termination, args)
+                         model_reward, model_transition, model_termination, args)
         self.space_action_hallucinated = gym.spaces.Box(
             low=-1, high=1, shape=space_observation.shape, dtype=np.float32)
         self.beta = beta
@@ -251,6 +258,8 @@ class EnvModelHallucinated(EnvModel):
                 state_next, self.bound_state_low, self.bound_state_high)
             reward = reward.squeeze().cpu().numpy()
             state_next = state_next.cpu().numpy()
+            if self.use_true_reward:
+                reward = self.model_reward(state, action, state_next)
             done = self.model_termination(state_next)
             return state_next, reward, done, {}
 

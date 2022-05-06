@@ -76,7 +76,7 @@ def train_sac(agent, env, dataset, args):
             rollout.rollout_steps(env, agent, dataset, num_samples)
         idx_step += num_samples
         args.idx_step_agent_global += num_samples
-        if idx_step % args.interval_train_agent == 0:
+        if idx_step % args.interval_train_agent_internal == 0:
             dataloader = utils.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
                 loss_q, loss_pi, loss_alpha = agent.step(batch)
