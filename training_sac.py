@@ -18,7 +18,7 @@ import utils
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Soft Actor-Critic")
-    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "InvertedPendulum", "Hopper", "HalfCheetah"], required=True,
+    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "InvertedPendulum", "Swimmer", "Hopper", "HalfCheetah"], required=True,
                         help="name of the environment")
     parser.add_argument("--id_experiment", type=str,
                         help="id of the experiment")
@@ -36,8 +36,8 @@ if __name__ == "__main__":
                         help="random seed (default: 42)")
     parser.add_argument("--size_batch", type=int, default=256,
                         help="batch size (default: 256)")
-    parser.add_argument("--num_steps_rollout_startup", type=int, default=128,
-                        help="number of steps of rollout to do during startup (default: 128)")
+    parser.add_argument("--num_steps_rollout_startup", type=int, default=0,
+                        help="number of steps of rollout to do during startup (default: 0)")
     parser.add_argument("--num_steps_train_startup", type=int, default=128,
                         help="number of steps of training to do during startup (default: 128)")
     parser.add_argument("--num_steps_agent", type=int, default=4096,
@@ -73,11 +73,14 @@ if __name__ == "__main__":
         env = gym.make("MountainCarContinuous-v0")
         env = envs.WrapperEnvMountainCar(env)
     elif args.name_env == "Pendulum":
-        env = gym.make("Pendulum-v1", g=9.81)
+        env = gym.make("Pendulum-v1")
         env = envs.WrapperEnvPendulum(env)
     elif args.name_env == "InvertedPendulum":
         env = gym.make("InvertedPendulum-v2")
         env = envs.WrapperEnvInvertedPendulum(env)
+    elif args.name_env == "Swimmer":
+        env = gym.make("Swimmer-v3")
+        env = envs.WrapperEnvSwimmer(env)
     elif args.name_env == "Hopper":
         env = gym.make("Hopper-v3")
         env = envs.WrapperEnvHopper(env)

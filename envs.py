@@ -114,6 +114,15 @@ class WrapperEnvInvertedPendulum(WrapperEnv):
     def done(self, state):
         return np.abs(state[..., 1]) > 0.2
 
+class WrapperEnvSwimmer(WrapperEnv):
+
+    def reward(self, state, action, state_next):
+        raise NotImplementedError
+    
+    def done(self, state):
+        if len(state.shape) == 2:
+            return np.zeros(state.shape[0], dtype=np.bool_)
+        return False
 
 class WrapperEnvHopper(WrapperEnv):
 
