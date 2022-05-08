@@ -30,6 +30,7 @@ class LayerLinear(torch.nn.Module):
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             torch.nn.init.uniform_(self.bias, -bound, bound)
 
+
 class NetDense(torch.nn.Module):
 
     def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
@@ -45,56 +46,27 @@ class NetDense(torch.nn.Module):
         self.scaler_x = utils.ScalerStandard()
         self.scaler_y = utils.ScalerStandard()
 
-    def forward(self, x):
+    def _apply_layers(self, x):
         x = self.scaler_x.transform(x)
         x = x.repeat(self.size_ensemble, 1, 1)
         y = self.layers(x).squeeze(dim=1)
-        return y, torch.tensor(1.0, dtype=torch.float32, device=y.device)
+        return y 
 
-    def get_distr(self, x, epistemic=False):
-        means, stds = self(x)
-        mean = torch.mean(means, dim=0)
-        var_aleatoric = torch.mean(stds**2, dim=0)
-        var_epistemic = torch.var(means, dim=0)
-        var = var_aleatoric + var_epistemic
-        std = torch.sqrt(var)
-        mean, std = self.scaler_y.inverse_transform(mean, std)
-        if epistemic:
-            std_epistemic = torch.sqrt(var_epistemic)
-            _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
-            return mean, std, std_epistemic
-        return mean, std
-
-class NetGaussHomo(torch.nn.Module):
-
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
-        super().__init__()
-        self.size_ensemble = size_ensemble
-        self.net = NetDense(dim_x, dim_y, num_h, dim_h, size_ensemble)
-        self.stds_log = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, 1,dim_y)))
-        torch.nn.init.kaiming_uniform_(self.stds_log, a=math.sqrt(5))
-
-    @property
-    def scaler_x(self):
-        return self.net.scaler_x
-
-    @property
-    def scaler_y(self):
-        return self.net.scaler_y
+    def _extract_distrs(self, y):
+        means = y
+        stds = torch.ones(y.shape, dtype=torch.float32, device=y.device)
+        return means, stds
 
     def forward(self, x):
-        means, _ = self.net(x)
-        stds_log = torch.clamp(self.stds_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
-        if len(means.shape) == 2:
-            stds_log = stds_log.squeeze(dim=1)
-        stds = stds_log.exp()
+        y = self._apply_layers(x)
+        means, stds = self._extract_distrs(y)
         return means, stds
 
     def get_distr(self, x, epistemic=False):
         means, stds = self(x)
         mean = torch.mean(means, dim=0)
         var_aleatoric = torch.mean(stds**2, dim=0)
-        var_epistemic = torch.var(means, dim=0)
+        var_epistemic = torch.var(means, dim=0, unbiased=False)
         var = var_aleatoric + var_epistemic
         std = torch.sqrt(var)
         mean, std = self.scaler_y.inverse_transform(mean, std)
@@ -104,32 +76,42 @@ class NetGaussHomo(torch.nn.Module):
             return mean, std, std_epistemic
         return mean, std
 
-class NetGauss(torch.nn.Module):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h):
-        super().__init__()
-        self.base = NetDense(dim_x, dim_h, num_h - 1, dim_h)
-        self.activation = torch.nn.ReLU()
-        self.head_mean = torch.nn.Linear(dim_h, dim_y)
-        self.head_std_log = torch.nn.Linear(dim_h, dim_y)
+class NetGaussHomo(NetDense):
 
-    def forward(self, x):
-        h, _ = self.base.get_distr(x)
-        h = self.activation(h)
-        mean = self.head_mean(h)
-        std_log = self.head_std_log(h)
-        std_log = torch.clamp(std_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
-        std = std_log.exp()
-        distr = torch.distributions.Normal(mean, std)
-        y = distr.rsample()
-        prob_log = distr.log_prob(y)
-        return y, mean, prob_log
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
+        super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble)
+        self.stds_log = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, 1,dim_y)))
+        torch.nn.init.kaiming_uniform_(self.stds_log, a=math.sqrt(5))
+
+    def _extract_distrs(self, y):
+        means = y
+        stds_log = torch.clamp(self.stds_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
+        if len(means.shape) == 2:
+            stds_log = stds_log.squeeze(dim=1)
+        stds = stds_log.exp()
+        return means, stds
+
+
+class NetGaussHetero(NetDense):
+
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
+        super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble)
+        self.dim_y = dim_y
+    
+    def _extract_distrs(self, y):
+        means = y[..., :self.dim_y]
+        stds_log = y[..., self.dim_y:]
+        stds_log = torch.clamp(stds_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
+        stds = stds_log.exp()
+        return means, stds
+
 
 class PolicyGauss(torch.nn.Module):
 
     def __init__(self, dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high):
         super().__init__()
-        self.net = NetGauss(dim_state, dim_action, num_h, dim_h)
+        self.net = NetGaussHetero(dim_state, dim_action, num_h, dim_h)
         bound_action_scale = (bound_action_high - bound_action_low) / 2
         self.bound_action_scale = torch.tensor(
             bound_action_scale, dtype=torch.float32)
@@ -145,7 +127,10 @@ class PolicyGauss(torch.nn.Module):
         return y, mean, prob_log
 
     def forward(self, state):
-        action, mean, prob_log = self.net(state)
+        mean, std = self.net.get_distr(state)
+        distr = torch.distributions.Normal(mean, std)
+        action = distr.rsample()
+        prob_log = distr.log_prob(action)
         action, mean, prob_log = self._project(action, mean, prob_log)
         prob_log = prob_log.sum(-1, keepdim=True)
         return action, mean, prob_log
