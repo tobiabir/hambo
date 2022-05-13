@@ -60,8 +60,6 @@ if __name__ == "__main__":
                         help="number of steps of rollout to do during startup (default: 0)")
     parser.add_argument("--interval_train_model", type=int, default=128,
                         help="interval of steps after which a round of training is done (default: 128)")
-    parser.add_argument("--num_steps_train_model", type=int, default=512,
-                        help="number of steps to train model per iteration (default: 512)")
     parser.add_argument("--num_steps_rollout_model", type=int, default=1,
                         help="number of steps to rollout model from initial state (a.k.a. episode length) (default: 1)")
     parser.add_argument("--num_steps_agent", type=int, default=1024,
@@ -145,6 +143,7 @@ if __name__ == "__main__":
     env_model = EnvModel(env.observation_space, env.action_space, None, env.reward, model, env.done, args)
     env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
     env_model = envs.WrapperEnv(env_model)
+    is_trained_model = False
 
     agent_random = agents.AgentRandom(env.action_space)
     agent = agents.AgentSAC(env_model.observation_space, env_model.action_space, args)
@@ -171,7 +170,8 @@ if __name__ == "__main__":
         dataset_states_initial.append(state)
         if (idx_step + 1) % args.interval_train_model == 0:
             training.train_ensemble_map(model, dataset, args)
-        if (idx_step + 1) % args.interval_train_agent == 0:
+            is_trained_model = True
+        if is_trained_model and (idx_step + 1) % args.interval_train_agent == 0:
             model.eval()
             env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, env.reward, model, env.done, args)
             env_model = gym.wrappers.TimeLimit(env_model, args.num_steps_rollout_model)
