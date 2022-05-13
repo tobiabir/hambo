@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     env.reset()
 
-    utils.startup(env, agent, dataset, None, args.num_steps_startup)
+    utils.startup(env, agent, [], dataset, None, args.num_steps_startup)
     args.idx_step_agent_global += args.num_steps_rollout_startup
 
     training.train_sac(agent, env, dataset, args, args.num_steps_rollout_startup)

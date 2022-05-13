@@ -51,7 +51,6 @@ def train_ensemble_map(model, dataset, args):
     model.train()
     len_train = int(0.8 * len(dataset))
     len_eval = len(dataset) - len_train
-    print(len_train, len_eval)
     dataset_train, dataset_eval = torch.utils.data.random_split(dataset, [len_train, len_eval])
     utils.preprocess(model, dataset_train, args.device)
     dataloader_train = torch.utils.data.DataLoader(
@@ -99,13 +98,14 @@ def train_ensemble_map(model, dataset, args):
     
     for idx_model in range(model.size_ensemble):
         model.load_state_dict_single(state_dicts_best[idx_model], idx_model)
-    loss_model = losses_eval_best.mean()
-    wandb.log({"loss_model": loss_model, "idx_step": args.idx_step})
-    print(f"idx_step: {args.idx_step}, loss: {loss_model}")
+
+    model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites]
+
+    return losses_eval_best
 
     return model
         
-def train_sac(agent, env, dataset, args, idx_step_start=0):
+def train_sac(agent, env, dataset_env, dataset_model, args, idx_step_start=0):
     if "interval_eval_agent" in args:
         num_samples = np.gcd(args.interval_train_agent_internal, args.interval_eval_agent)
     else:
@@ -115,15 +115,16 @@ def train_sac(agent, env, dataset, args, idx_step_start=0):
     while idx_step < args.num_steps_agent:
         agent.train()
         if hasattr(env, "rollout"):
-            env.rollout(agent, dataset, num_samples, args.num_steps_rollout_model)
+            env.rollout(agent, dataset_model, num_samples, args.num_steps_rollout_model)
         else:
-            rollout.rollout_steps(env, agent, dataset, None, num_samples)
+            rollout.rollout_steps(env, agent, dataset_model, None, num_samples)
         idx_step += num_samples
         args.idx_step_agent_global += num_samples
         if idx_step % args.interval_train_agent_internal == 0:
+            dataset = torch.utils.data.ConcatDataset((dataset_env, dataset_model))
             dataloader = utils.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
-                loss_q, loss_pi, loss_alpha = agent.step(batch)
+                loss_pi, loss_q, loss_alpha = agent.step(batch)
             wandb.log({"loss_critic": loss_q, "loss_actor": loss_pi, "alpha": args.alpha, "loss_alpha": loss_alpha, "idx_step": args.idx_step_agent_global - 1})
             print(f"idx_step_agent_global: {args.idx_step_agent_global}, idx_step_agent: {idx_step}, loss_q: {loss_q}, loss_pi: {loss_pi}, alpha: {agent.alpha}, loss_alpha: {loss_alpha}")
         if "interval_eval_agent" in args and idx_step % args.interval_eval_agent == 0:

@@ -33,9 +33,8 @@ class LayerLinear(torch.nn.Module):
 
 class NetDense(torch.nn.Module):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
         super().__init__()
-        self.size_ensemble = size_ensemble
         self.layers = torch.nn.Sequential()
         self.layers.append(LayerLinear(dim_x, dim_h, size_ensemble))
         self.layers.append(torch.nn.ReLU())
@@ -45,6 +44,9 @@ class NetDense(torch.nn.Module):
         self.layers.append(LayerLinear(dim_h, dim_y, size_ensemble))
         self.scaler_x = utils.ScalerStandard()
         self.scaler_y = utils.ScalerStandard()
+        self.size_ensemble = size_ensemble
+        self.num_elites = num_elites
+        self.idxs_elites = torch.arange(0, num_elites, dtype=torch.int64)
 
     def _apply_layers(self, x):
         x = self.scaler_x.transform(x)
@@ -64,6 +66,7 @@ class NetDense(torch.nn.Module):
 
     def get_distr(self, x, epistemic=False):
         means, stds = self(x)
+        means, stds = means[self.idxs_elites], stds[self.idxs_elites]
         mean = torch.mean(means, dim=0)
         var_aleatoric = torch.mean(stds**2, dim=0)
         var_epistemic = torch.var(means, dim=0, unbiased=False)
@@ -85,8 +88,8 @@ class NetDense(torch.nn.Module):
 
 class NetGaussHomo(NetDense):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
-        super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble)
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
+        super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites)
         self.stds_log = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, 1,dim_y)))
         torch.nn.init.kaiming_uniform_(self.stds_log, a=math.sqrt(5))
 
@@ -101,8 +104,8 @@ class NetGaussHomo(NetDense):
 
 class NetGaussHetero(NetDense):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1):
-        super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble)
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
+        super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites)
         self.dim_y = dim_y
     
     def _extract_distrs(self, y):

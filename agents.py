@@ -69,19 +69,19 @@ class AgentSAC(Agent):
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_target.eval()
         self.optim_critic = torch.optim.Adam(
-            self.critic.parameters(), lr=args.lr)
+            self.critic.parameters(), lr=args.lr_agent)
         bound_action_low = space_action.low[0]
         bound_action_high = space_action.high[0]
         self.policy = nets.PolicyGauss(
             dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high).to(self.device)
         self.optim_policy = torch.optim.Adam(
-            self.policy.parameters(), lr=args.lr)
+            self.policy.parameters(), lr=args.lr_agent)
         self.entropy_target = -np.prod(space_action.shape).astype(np.float32)
         self.learn_alpha = args.learn_alpha
         if self.learn_alpha:
             self.alpha_log = torch.tensor(0., requires_grad=True).to(self.device)
             self.alpha = self.alpha_log.detach().exp()
-            self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=args.lr)
+            self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=args.lr_agent)
         else:
             self.alpha = args.alpha
         self.training = True
@@ -141,7 +141,7 @@ class AgentSAC(Agent):
 
         utils.soft_update(self.critic_target, self.critic, self.tau)
 
-        return loss_q, loss_pi, loss_alpha
+        return loss_pi, loss_q, loss_alpha
 
     def train(self):
         self.policy.train()
