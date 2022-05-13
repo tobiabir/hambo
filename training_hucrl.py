@@ -79,10 +79,13 @@ if __name__ == "__main__":
     parser.add_argument("--replay_size", type=int, default=100000,
                         help="capacity of replay buffer (default: 100000)")
     args = parser.parse_args()
-    if args.hallucinate:
-        args.algorithm = "HMBSAC"
+    if type(args.interval_train_model) == float:
+        args.algorithm = "SAC"
     else:
-        args.algorithm = "MBSAC"
+        if args.hallucinate:
+            args.algorithm = "HMBSAC"
+        else:
+            args.algorithm = "MBSAC"
     if args.device is None:
         if torch.cuda.is_available():
             args.device = "cuda"
