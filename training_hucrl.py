@@ -46,6 +46,8 @@ if __name__ == "__main__":
                         help="regularizer weight alpha of the entropy regularization term for sac training (default: 0.05)")
     parser.add_argument("--learn_alpha", default=False, action="store_true",
                         help="set to learn alpha (default: False)")
+    parser.add_argument("--lr_model", type=float, default=0.0001,
+                        help="learning rate (default: 0.001)")
     parser.add_argument("--lr", type=float, default=0.0003,
                         help="learning rate (default: 0.0003)")
     parser.add_argument("--seed", type=int, default=42,
@@ -54,10 +56,8 @@ if __name__ == "__main__":
                         help="batch size (default: 256)")
     parser.add_argument("--num_steps", type=int, default=4096,
                         help="number of steps (default: 4096)")
-    parser.add_argument("--num_steps_rollout_startup", type=int, default=0,
+    parser.add_argument("--num_steps_startup", type=int, default=0,
                         help="number of steps of rollout to do during startup (default: 0)")
-    parser.add_argument("--num_steps_train_startup", type=int, default=128,
-                        help="number of steps of training to do during startup (default: 128)")
     parser.add_argument("--interval_train_model", type=int, default=128,
                         help="interval of steps after which a round of training is done (default: 128)")
     parser.add_argument("--num_steps_train_model", type=int, default=512,
@@ -119,6 +119,7 @@ if __name__ == "__main__":
 
     dim_action = env.action_space.shape[0]
     
+    args.idx_step = 0
     args.idx_step_agent_global = 0
 
     # setting rng seeds
@@ -155,10 +156,10 @@ if __name__ == "__main__":
     state = env.reset()
     dataset_states_initial.append(state)
 
-    utils.startup(env, agent, dataset, dataset_states_initial, args.num_steps_rollout_startup, args.num_steps_train_startup, args.size_batch) 
-    args.idx_step_agent_global += args.num_steps_rollout_startup
+    utils.startup(env, agent, dataset, dataset_states_initial, args.num_steps_startup) 
+    args.idx_step += args.num_steps_startup
 
-    for idx_step in range(args.num_steps_rollout_startup, args.num_steps):
+    for idx_step in range(args.num_steps_startup, args.num_steps):
         agent.train()
         action = agent.get_action(state)[:dim_action]
         state_next, reward, done, info = env.step(action)
@@ -181,4 +182,5 @@ if __name__ == "__main__":
             reward_avg = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)
             wandb.log({"reward": reward_avg, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, reward: {reward_avg}")
+        args.idx_step = idx_step
 

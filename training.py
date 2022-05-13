@@ -38,27 +38,71 @@ def train_ensemble(model, dataset, args):
         optimizer.step()
     return model
 
+#class TrainerModel(Trainer):
+#    
+#    def __init__(self, model)
+#        self.model = model
+#        self.fn_loss = fn_loss_map 
+#
+
+    
+
 def train_ensemble_map(model, dataset, args):
     model.train()
-    utils.preprocess(model, dataset, args.device)
-    dataloader = utils.get_dataloader(dataset, args.num_steps_train_model, args.size_batch)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    def fn_loss(y_pred_mean, y_pred_std, y_train):
-        loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum()
-        if args.weight_regularizer_model > 0:
+    len_train = int(0.8 * len(dataset))
+    len_eval = len(dataset) - len_train
+    print(len_train, len_eval)
+    dataset_train, dataset_eval = torch.utils.data.random_split(dataset, [len_train, len_eval])
+    utils.preprocess(model, dataset_train, args.device)
+    dataloader_train = torch.utils.data.DataLoader(
+        dataset=dataset_train,
+        batch_size=args.size_batch,
+        shuffle=True,
+        num_workers=1,
+    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model)
+
+    def fn_loss(y_pred_mean, y_pred_std, y_train, weight_regularizer=0.0):
+        loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
+        if weight_regularizer > 0:
             distr_standard_normal = torch.distributions.Normal(0,1)
             for parameter in model.parameters():
-                loss -= args.weight_regularizer_model * distr_standard_normal.log_prob(parameter).sum()
+                loss -= weight_regularizer * distr_standard_normal.log_prob(parameter).sum(dim=(1,2))
         return loss
-    for state, action, reward, state_next, done in dataloader:
-        x = torch.cat((state, action), dim=-1).to(args.device)
-        y_pred_means, y_pred_stds = model(x)
-        y = torch.cat((reward, state_next), dim=-1).to(args.device)
-        y = model.scaler_y.transform(y)
-        loss = fn_loss(y_pred_means, y_pred_stds, y)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+
+    losses_eval_best = evaluation.evaluate_model(model, dataset_eval, fn_loss, args.device)
+    state_dicts_best = [model.state_dict()] * model.size_ensemble
+    idxs_epoch_best = - np.ones(model.size_ensemble)
+    idx_epoch_curr = 0
+    idx_step = 0
+    while (idx_epoch_curr - 5 <= idxs_epoch_best).any():
+        model.train()
+        for state, action, reward, state_next, done in dataloader_train:
+            x = torch.cat((state, action), dim=-1).to(args.device)
+            y_pred_means, y_pred_stds = model(x)
+            y = torch.cat((reward, state_next), dim=-1).to(args.device)
+            y = model.scaler_y.transform(y)
+            loss = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            idx_step += 1
+        losses_eval_curr = evaluation.evaluate_model(model, dataset_eval, fn_loss, args.device)
+        improvement = (losses_eval_best - losses_eval_curr) / losses_eval_best
+        state_dict = model.state_dict()
+        for idx_model in range(model.size_ensemble):
+            if 0.001 < improvement[idx_model]:
+                losses_eval_best[idx_model] = losses_eval_curr[idx_model]
+                state_dicts_best[idx_model] = state_dict
+                idxs_epoch_best[idx_model] = idx_epoch_curr
+        idx_epoch_curr += 1
+    
+    for idx_model in range(model.size_ensemble):
+        model.load_state_dict_single(state_dicts_best[idx_model], idx_model)
+    loss_model = losses_eval_best.mean()
+    wandb.log({"loss_model": loss_model, "idx_step": args.idx_step})
+    print(f"idx_step: {args.idx_step}, loss: {loss_model}")
+
     return model
         
 def train_sac(agent, env, dataset, args, idx_step_start=0):

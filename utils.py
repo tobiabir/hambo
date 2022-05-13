@@ -51,14 +51,11 @@ def get_dataloader(dataset, num_batches, size_batch, num_workers=2):
     )
     return dataloader
 
-def startup(env, agent, dataset, dataset_states_initial, num_steps_rollout, num_steps_train, size_batch):
+def startup(env, agent, dataset, dataset_states_initial, num_steps_rollout):
     if num_steps_rollout <= 0:
         return
     agent_random = agents.AgentRandom(env.action_space)
     rollout.rollout_steps(env, agent_random, dataset, dataset_states_initial, num_steps_rollout)
-    dataloader = get_dataloader(dataset, num_steps_train, size_batch)
-    for batch in dataloader:
-        agent.step(batch)
 
 class ScalerStandard():
     
@@ -80,13 +77,32 @@ class ScalerStandard():
 
 
 def preprocess(model, dataset, device="cpu"):
-    state, action, reward, state_next, _ = dataset.sample(len(dataset), replacement=False)
-    x = np.concatenate((state, action), axis=-1)
-    x = torch.tensor(x, dtype=torch.float32, device=device)
-    y = np.concatenate((reward, state_next), axis=-1)
-    y = torch.tensor(y, dtype=torch.float32, device=device)
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
+    state, action, reward, state_next, _ = next(iter(dataloader))
+    x = torch.cat((state, action), dim=-1).to(device)
+    y = torch.cat((reward, state_next), dim=-1).to(device)
     model.scaler_x.fit(x)
     model.scaler_y.fit(y)
+
+
+class SchedulerLinear():
+
+    def __init__(self, val_init, val_target, step_start, step_end):
+        self.val_init = val_init
+        self.val_target=  val_target
+        self.step_start = step_start
+        self.step_end = step_end
+        self.step_curr = -1
+    
+    def next(self):
+        self.step_curr += 1
+        
+        if self.step_curr >= self.step_end:
+            return self.val_target
+        elif self.step_curr <= self.step_start:
+            return self.val_init
+        else:
+            return self.val_init + (self.val_target - self.val_init) * ((self.step_curr - self.step_start) * 1.0 / (self.step_end - self.step_start))
 
 
 class Wrapper:

@@ -36,10 +36,8 @@ if __name__ == "__main__":
                         help="random seed (default: 42)")
     parser.add_argument("--size_batch", type=int, default=256,
                         help="batch size (default: 256)")
-    parser.add_argument("--num_steps_rollout_startup", type=int, default=0,
+    parser.add_argument("--num_steps_startup", type=int, default=0,
                         help="number of steps of rollout to do during startup (default: 0)")
-    parser.add_argument("--num_steps_train_startup", type=int, default=128,
-                        help="number of steps of training to do during startup (default: 128)")
     parser.add_argument("--num_steps_agent", type=int, default=4096,
                         help="number of steps (default: 4096)")
     parser.add_argument("--interval_train_agent_internal", type=int, default=128,
@@ -99,7 +97,7 @@ if __name__ == "__main__":
 
     env.reset()
 
-    utils.startup(env, agent, dataset, None, args.num_steps_rollout_startup, args.num_steps_train_startup, args.size_batch)
+    utils.startup(env, agent, dataset, None, args.num_steps_startup)
     args.idx_step_agent_global += args.num_steps_rollout_startup
 
     training.train_sac(agent, env, dataset, args, args.num_steps_rollout_startup)

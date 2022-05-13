@@ -76,6 +76,12 @@ class NetDense(torch.nn.Module):
             return mean, std, std_epistemic
         return mean, std
 
+    def load_state_dict_single(self, state_dict_new, idx_model):
+        state_dict = self.state_dict()
+        for key in state_dict:
+            state_dict[key][idx_model] = state_dict_new[key][idx_model]
+        self.load_state_dict(state_dict)
+
 
 class NetGaussHomo(NetDense):
 
