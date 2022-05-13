@@ -83,7 +83,7 @@ if __name__ == "__main__":
         env = gym.make("Hopper-v3")
         env = envs.WrapperEnvHopper(env)
     elif args.name_env == "HalfCheetah":
-        env = gym.make("HalfCheetah-v3", exclude_current_positions_from_observation=False)
+        env = gym.make("HalfCheetah-v3")
         env = envs.WrapperEnvHalfCheetah(env)
 
     args.idx_step_agent_global = 0
