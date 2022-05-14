@@ -93,7 +93,7 @@ if __name__ == "__main__":
             args.device = "cpu"
     print(f"device: {args.device}")
 
-    wandb.init(mode="disabled", project="Master Thesis", entity="tobiabir", config=args)
+    wandb.init(project="Master Thesis", entity="tobiabir", config=args)
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
