@@ -93,7 +93,7 @@ if __name__ == "__main__":
             args.device = "cpu"
     print(f"device: {args.device}")
 
-    wandb.init(project="Master Thesis", entity="tobiabir", config=args)
+    wandb.init(mode="disabled", project="Master Thesis", entity="tobiabir", config=args)
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     elif args.model == "EnsembleDeterministic":
         Model = nets.NetDense
     elif args.model == "EnsembleProbabilistic":
-        Model = nets.NetGaussHomo
+        Model = nets.NetGaussHetero
     model = Model(
         dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
         dim_y=1 + env.observation_space.shape[0],
@@ -176,8 +176,10 @@ if __name__ == "__main__":
         if (idx_step + 1) % args.interval_train_model == 0:
             losses_model = training.train_ensemble_map(model, dataset_env, args)
             loss_model = losses_model.mean()
-            wandb.log({"loss_model": loss_model, "idx_step": idx_step})
-            print(f"idx_step: {idx_step}, loss_model: {loss_model}")
+            std_log_min = model.std_log_min.mean()
+            std_log_max = model.std_log_max.mean()
+            wandb.log({"loss_model": loss_model, "std_log_min": std_log_min, "std_log_max": std_log_max, "idx_step": idx_step})
+            print(f"idx_step: {idx_step}, loss_model: {loss_model}, std_log_min: {model.std_log_min.mean()}, std_log_max: {model.std_log_max.mean()}")
             has_trained_model = True
         if has_trained_model and (idx_step + 1) % args.interval_rollout_model == 0:
             model.eval()
@@ -190,8 +192,8 @@ if __name__ == "__main__":
             dataloader = utils.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
                 loss_actor, loss_critic, loss_alpha = agent.step(batch)
-            wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "idx_step": idx_step})
-            print(f"idx_step: {idx_step}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}")
+            wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_step": idx_step})
+            print(f"idx_step: {idx_step}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}, alpha: {agent.alpha}")
         if (idx_step + 1) % args.interval_eval_agent == 0:
             env_eval = copy.deepcopy(env)
             return_eval = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)

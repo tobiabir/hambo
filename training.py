@@ -65,12 +65,12 @@ def train_ensemble_map(model, dataset, args):
         loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
         if weight_regularizer > 0:
             distr_standard_normal = torch.distributions.Normal(0,1)
-            for parameter in model.parameters():
+            for parameter in model.layers.parameters():
                 loss -= weight_regularizer * distr_standard_normal.log_prob(parameter).sum(dim=(1,2))
         return loss
 
     losses_eval_best = evaluation.evaluate_model(model, dataset_eval, fn_loss, args.device)
-    state_dicts_best = [model.state_dict()] * model.size_ensemble
+    state_dicts_best = [model.layers.state_dict()] * model.size_ensemble
     idxs_epoch_best = - np.ones(model.size_ensemble)
     idx_epoch_curr = 0
     idx_step = 0
@@ -82,13 +82,14 @@ def train_ensemble_map(model, dataset, args):
             y = torch.cat((reward, state_next), dim=-1).to(args.device)
             y = model.scaler_y.transform(y)
             loss = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
+            loss += 0.01 * model.std_log_max.sum() - 0.01 * model.std_log_min.sum()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             idx_step += 1
         losses_eval_curr = evaluation.evaluate_model(model, dataset_eval, fn_loss, args.device)
         improvement = (losses_eval_best - losses_eval_curr) / losses_eval_best
-        state_dict = model.state_dict()
+        state_dict = model.layers.state_dict()
         for idx_model in range(model.size_ensemble):
             if 0.001 < improvement[idx_model]:
                 losses_eval_best[idx_model] = losses_eval_curr[idx_model]

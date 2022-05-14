@@ -80,10 +80,10 @@ class NetDense(torch.nn.Module):
         return mean, std
 
     def load_state_dict_single(self, state_dict_new, idx_model):
-        state_dict = self.state_dict()
+        state_dict = self.layers.state_dict()
         for key in state_dict:
             state_dict[key][idx_model] = state_dict_new[key][idx_model]
-        self.load_state_dict(state_dict)
+        self.layers.load_state_dict(state_dict)
 
 
 class NetGaussHomo(NetDense):
@@ -92,10 +92,13 @@ class NetGaussHomo(NetDense):
         super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites)
         self.stds_log = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, 1,dim_y)))
         torch.nn.init.kaiming_uniform_(self.stds_log, a=math.sqrt(5))
+        self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)))
+        self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)))
 
     def _extract_distrs(self, y):
         means = y
-        stds_log = torch.clamp(self.stds_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
+        stds_log = self.std_log_max - torch.nn.functional.softplus(self.std_log_max - self.stds_log)
+        stds_log = self.std_log_min + torch.nn.functional.softplus(self.stds_log - self.std_log_min)
         if len(means.shape) == 2:
             stds_log = stds_log.squeeze(dim=1)
         stds = stds_log.exp()
@@ -107,11 +110,14 @@ class NetGaussHetero(NetDense):
     def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
         super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites)
         self.dim_y = dim_y
+        self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)))
+        self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)))
     
     def _extract_distrs(self, y):
         means = y[..., :self.dim_y]
         stds_log = y[..., self.dim_y:]
-        stds_log = torch.clamp(stds_log, min=STD_LOG_MIN, max=STD_LOG_MAX)
+        stds_log = self.std_log_max - torch.nn.functional.softplus(self.std_log_max - stds_log)
+        stds_log = self.std_log_min + torch.nn.functional.softplus(stds_log - self.std_log_min)
         stds = stds_log.exp()
         return means, stds
 
