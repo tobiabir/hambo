@@ -40,6 +40,8 @@ if __name__ == "__main__":
                         help="set to use aleatoric noise from transition model (default: False)")
     parser.add_argument("--hallucinate", default=False, action="store_true",
                         help="set to add hallucinated control (default: False)")
+    parser.add_argument("--ratio_env_model", type=float, default=0.05,
+                        help="ratio of env data to model data in agent batches")
     parser.add_argument("--tau", type=float, default=0.005,
                         help="target smoothing coefficient (default: 0.005)")
     parser.add_argument("--alpha", type=float, default=0.05,
@@ -76,8 +78,8 @@ if __name__ == "__main__":
                         help="number of episodes to evaluate (default: 1)")
     parser.add_argument("--device", default=None,
                         help="device (default: gpu if available else cpu)")
-    parser.add_argument("--replay_size", type=int, default=100000,
-                        help="capacity of replay buffer (default: 100000)")
+    parser.add_argument("--replay_size", type=int, default=1000000,
+                        help="capacity of replay buffer (default: 1000000)")
     args = parser.parse_args()
     if type(args.interval_train_model) == float:
         args.algorithm = "SAC"
@@ -147,6 +149,7 @@ if __name__ == "__main__":
     env_model = EnvModel(env.observation_space, env.action_space, None, model, env.done, args)
     env_model = gym.wrappers.TimeLimit(env_model, args.max_length_rollout_model)
     env_model = envs.WrapperEnv(env_model)
+    env_eval = copy.deepcopy(env)
     has_trained_model = False
 
     agent_random = agents.AgentRandom(env.action_space)
@@ -188,14 +191,12 @@ if __name__ == "__main__":
             env_model = envs.WrapperEnv(env_model)
             env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
         if (idx_step + 1) % args.interval_train_agent == 0:
-            dataset = torch.utils.data.ConcatDataset((dataset_env, dataset_model))
-            dataloader = utils.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
+            dataloader = utils.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
             for batch in dataloader:
                 loss_actor, loss_critic, loss_alpha = agent.step(batch)
             wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}, alpha: {agent.alpha}")
         if (idx_step + 1) % args.interval_eval_agent == 0:
-            env_eval = copy.deepcopy(env)
             return_eval = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)
             wandb.log({"return_eval": return_eval, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, return_eval: {return_eval}")

@@ -40,13 +40,16 @@ def set_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def get_dataloader(dataset, num_batches, size_batch, num_workers=2):
+def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio, num_workers=2):
+    dataset = torch.utils.data.ConcatDataset((dataset1, dataset2))
     num_samples = num_batches * size_batch
-    sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=num_samples)
+    #sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=num_samples)
+    sampler_batch = SamplerBatchRatio(len(dataset1), len(dataset2), num_batches, size_batch, ratio)
     dataloader = torch.utils.data.DataLoader(
         dataset=dataset,
-        batch_size=size_batch,
-        sampler=sampler,
+        #batch_size=size_batch,
+        #sampler=sampler,
+        batch_sampler=sampler_batch,
         num_workers=num_workers,
     )
     return dataloader
@@ -83,6 +86,29 @@ def preprocess(model, dataset, device="cpu"):
     y = torch.cat((reward, state_next), dim=-1).to(device)
     model.scaler_x.fit(x)
     model.scaler_y.fit(y)
+
+
+class SamplerBatchRatio():
+
+    def __init__(self, len1, len2, num_batches, size_batch, ratio):
+        self.len1 = len1
+        self.len2 = len2
+        self.num_batches = num_batches
+        if len2 == 0:
+            self.size_batch1 = size_batch
+        else:
+            self.size_batch1 = int(ratio * size_batch)
+        self.size_batch2 = size_batch - self.size_batch1
+
+    def __iter__(self):
+        for idx_batch in range(self.num_batches):
+            idxs1 = random.choices(range(self.len1), k=self.size_batch1)
+            idxs2 = random.choices(range(self.len1, self.len1 + self.len2), k=self.size_batch2)
+            idxs = idxs1 + idxs2
+            yield idxs
+
+    def __len__(self):
+        return self.num_batches
 
 
 class SchedulerLinear():
