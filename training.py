@@ -81,17 +81,16 @@ def train_ensemble_map(model, dataset, args):
             y_pred_means, y_pred_stds = model(x)
             y = torch.cat((reward, state_next), dim=-1).to(args.device)
             y = model.scaler_y.transform(y)
-            loss = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
-            loss += 0.01 * model.std_log_max.sum() - 0.01 * model.std_log_min.sum()
+            loss_map = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
+            loss = loss_map + 0.01 * model.std_log_max.sum() - 0.01 * model.std_log_min.sum()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             idx_step += 1
         losses_eval_curr = evaluation.evaluate_model(model, dataset_eval, fn_loss, args.device)
-        improvement = (losses_eval_best - losses_eval_curr) / losses_eval_best
         state_dict = model.layers.state_dict()
         for idx_model in range(model.size_ensemble):
-            if 0.001 < improvement[idx_model]:
+            if losses_eval_curr[idx_model] < losses_eval_best[idx_model]:
                 losses_eval_best[idx_model] = losses_eval_curr[idx_model]
                 state_dicts_best[idx_model] = state_dict
                 idxs_epoch_best[idx_model] = idx_epoch_curr
@@ -103,8 +102,6 @@ def train_ensemble_map(model, dataset, args):
     model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites]
 
     return losses_eval_best
-
-    return model
         
 def train_sac(agent, env, dataset_env, dataset_model, args, idx_step_start=0):
     if "interval_eval_agent" in args:

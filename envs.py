@@ -172,8 +172,9 @@ class EnvModel(gym.core.Env):
 
     def _step(self, state, action):
         with torch.no_grad():
-            x = np.concatenate((state, action), axis=-1)
-            x = torch.tensor(x, dtype=torch.float32, device=self.device)
+            state = torch.tensor(state, dtype=torch.float32, device=self.device)
+            action = torch.tensor(action, dtype=torch.float32, device=self.device)
+            x = torch.cat((state, action), dim=-1)
             y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
             if self.use_aleatoric:
                 y = torch.distributions.Normal(y_mean, y_std).sample()
