@@ -131,7 +131,7 @@ class WrapperEnvHopper(WrapperEnv):
 
     def done(self, state):
         height = state[..., 0]
-        angle = state[..., 0]
+        angle = state[..., 1]
         not_done = np.isfinite(state).all(axis=-1) * np.abs(state[..., 1:] < 100).all(axis=-1) * (height > 0.7) * (np.abs(angle) < 0.2)
         done = ~not_done
         return done
@@ -175,13 +175,24 @@ class EnvModel(gym.core.Env):
             state = torch.tensor(state, dtype=torch.float32, device=self.device)
             action = torch.tensor(action, dtype=torch.float32, device=self.device)
             x = torch.cat((state, action), dim=-1)
-            y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
+            y_means, y_stds = self.model_transition(x)
+            size_batch = x.shape[0]
+            idxs_model = np.random.choice(self.model_transition.idxs_elites, size_batch)
+            idxs_batch = np.arange(0, size_batch)
+            y_mean = y_means[idxs_model, idxs_batch]
+            y_std = y_stds[idxs_model, idxs_batch]
+            y_mean, y_std = self.model_transition.scaler_y.inverse_transform(y_mean, y_std)
             if self.use_aleatoric:
                 y = torch.distributions.Normal(y_mean, y_std).sample()
             else:
-                y = torch.distributions.Normal(y_mean, y_std_epistemic).sample()
+                y = y_mean
+            #y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
+            #if self.use_aleatoric:
+            #    y = torch.distributions.Normal(y_mean, y_std).sample()
+            #else:
+            #    y = torch.distributions.Normal(y_mean, y_std_epistemic).sample()
             reward = y[:, :1]
-            state_next = y[:, 1:]
+            state_next = state + y[:, 1:]
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
             reward = reward.squeeze().cpu().numpy()

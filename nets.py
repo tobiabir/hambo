@@ -3,8 +3,8 @@ import torch
 
 import utils
 
-STD_LOG_MIN = -20
-STD_LOG_MAX = 2
+STD_LOG_MIN = -10
+STD_LOG_MAX = 0.5
 EPS = 1e-6
 
 class LayerLinear(torch.nn.Module):
@@ -47,6 +47,8 @@ class NetDense(torch.nn.Module):
         self.size_ensemble = size_ensemble
         self.num_elites = num_elites
         self.idxs_elites = torch.arange(0, num_elites, dtype=torch.int64)
+        self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)), requires_grad=False)
+        self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)), requires_grad=False)
 
     def _apply_layers(self, x):
         x = self.scaler_x.transform(x)

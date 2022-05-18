@@ -38,14 +38,6 @@ def train_ensemble(model, dataset, args):
         optimizer.step()
     return model
 
-#class TrainerModel(Trainer):
-#    
-#    def __init__(self, model)
-#        self.model = model
-#        self.fn_loss = fn_loss_map 
-#
-
-    
 
 def train_ensemble_map(model, dataset, args):
     model.train()
@@ -79,7 +71,7 @@ def train_ensemble_map(model, dataset, args):
         for state, action, reward, state_next, done in dataloader_train:
             x = torch.cat((state, action), dim=-1).to(args.device)
             y_pred_means, y_pred_stds = model(x)
-            y = torch.cat((reward, state_next), dim=-1).to(args.device)
+            y = torch.cat((reward, state_next - state), dim=-1).to(args.device)
             y = model.scaler_y.transform(y)
             loss_map = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
             loss = loss_map + 0.01 * model.std_log_max.sum() - 0.01 * model.std_log_min.sum()

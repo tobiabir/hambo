@@ -24,7 +24,7 @@ def evaluate_model(model, dataset, fn_loss, device):
         state, action, reward, state_next, done = next(iter(dataloader))
         x = torch.cat((state, action), dim=-1).to(device)
         y_pred_means, y_pred_stds = model(x)
-        y = torch.cat((reward, state_next), dim=-1).to(device)
+        y = torch.cat((reward, state_next - state), dim=-1).to(device)
         y = model.scaler_y.transform(y)
         loss = fn_loss(y_pred_means, y_pred_stds, y)
     return loss

@@ -71,9 +71,11 @@ class ScalerStandard():
         self.std = torch.std(data, dim=0)
 
     def transform(self, data):
+        return data
         return (data - self.mean) / self.std
 
     def inverse_transform(self, data_mean, data_std):
+        return data_mean, data_std
         mean = self.mean + data_mean * self.std
         std = data_std * self.std
         return mean, std
@@ -83,7 +85,7 @@ def preprocess(model, dataset, device="cpu"):
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
     state, action, reward, state_next, _ = next(iter(dataloader))
     x = torch.cat((state, action), dim=-1).to(device)
-    y = torch.cat((reward, state_next), dim=-1).to(device)
+    y = torch.cat((reward, state_next - state), dim=-1).to(device)
     model.scaler_x.fit(x)
     model.scaler_y.fit(y)
 

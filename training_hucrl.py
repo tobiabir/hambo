@@ -114,7 +114,7 @@ if __name__ == "__main__":
         env = gym.make("Swimmer-v3")
         env = envs.WrapperEnvSwimmer(env)
     elif args.name_env == "Hopper":
-        env = gym.make("Hopper-v3")
+        env = gym.make("Hopper-v2")
         env = envs.WrapperEnvHopper(env)
     elif args.name_env == "HalfCheetah":
         env = gym.make("HalfCheetah-v3")
@@ -165,6 +165,8 @@ if __name__ == "__main__":
     print("startup...")
     utils.startup(env, agent, dataset_env, dataset_states_initial, args.num_steps_startup) 
     args.idx_step += args.num_steps_startup
+
+    state = env.state
 
     for idx_step in range(args.num_steps_startup, args.num_steps):
         agent.train()
