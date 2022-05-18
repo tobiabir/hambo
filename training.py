@@ -91,7 +91,7 @@ def train_ensemble_map(model, dataset, args):
     for idx_model in range(model.size_ensemble):
         model.load_state_dict_single(state_dicts_best[idx_model], idx_model)
 
-    model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites]
+    model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites].cpu()
 
     return losses_eval_best
         
