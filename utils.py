@@ -57,7 +57,7 @@ def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio, num_worke
 
 def get_scores_calibration(y_pred_means, y_pred_stds, y_train):
     cdfs = torch.distributions.Normal(y_pred_means, y_pred_stds).cdf(y_train)
-    levels_confidence = np.linspace(0, 1, 10) 
+    levels_confidence = torch.linspace(0, 1, 11, device=cdfs.device) 
     num_preds = cdfs.shape[1] * cdfs.shape[2]
     levels_confidence_empirical = [(cdfs < p).sum(dim=(1, 2)) / num_preds for p in levels_confidence]
     levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
