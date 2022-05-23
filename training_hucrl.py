@@ -24,8 +24,8 @@ if __name__ == "__main__":
                         help="id of the experiment")
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
-    parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilistic"], default="EnsembleProbabilistic",
-                        help="what type of model to use to learn dyamics of the environment (default: EnsembleProbabilistic)")
+    parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilisticHomoscedastic", "EnsembleProbabilisticHeteroscedastic"], default="EnsembleProbabilisticHeteroscedastic",
+                        help="what type of model to use to learn dyamics of the environment (default: EnsembleProbabilisticHeteroscedastic)")
     parser.add_argument("--num_h_model", type=int, default=2,
                         help="number of hidden layers in model (only for ensembles) (default: 2)")
     parser.add_argument("--dim_h_model", type=int, default=256,
@@ -132,7 +132,9 @@ if __name__ == "__main__":
         Model = None # TODO
     elif args.model == "EnsembleDeterministic":
         Model = nets.NetDense
-    elif args.model == "EnsembleProbabilistic":
+    elif args.model == "EnsembleProbabilisticHomoscedastic":
+        Model = nets.NetGaussHomo
+    elif args.model == "EnsembleProbabilisticHeteroscedastic":
         Model = nets.NetGaussHetero
     model = Model(
         dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
