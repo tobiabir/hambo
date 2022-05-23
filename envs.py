@@ -146,7 +146,7 @@ class EnvModel(gym.core.Env):
             x = torch.cat((state, action), dim=-1)
             y_means, y_stds = self.model_transition(x)
             size_batch = x.shape[0]
-            idxs_idxs_elites = torch.randint(0, self.model.num_elites, (size_batch,), device=self.device)
+            idxs_idxs_elites = torch.randint(0, self.model_transition.num_elites, (size_batch,), device=self.device)
             idxs_model = self.model_transition.idxs_elites[idxs_idxs_elites]
             idxs_batch = torch.arange(0, size_batch, device=self.device)
             y_mean = y_means[idxs_model, idxs_batch]
