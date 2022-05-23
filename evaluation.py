@@ -17,7 +17,7 @@ def evaluate(agent, env, num_episodes):
     reward_avg = reward / num_episodes
     return reward_avg
 
-def evaluate_model(model, dataset, fn_loss, device):
+def evaluate_model(model, dataset, fns_eval, device):
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
     model.eval()
     with torch.no_grad():
@@ -26,8 +26,8 @@ def evaluate_model(model, dataset, fn_loss, device):
         y_pred_means, y_pred_stds = model(x)
         y = torch.cat((reward, state_next - state), dim=-1).to(device)
         y = model.scaler_y.transform(y)
-        loss = fn_loss(y_pred_means, y_pred_stds, y)
-    return loss
+        scores = [fn_eval(y_pred_means, y_pred_stds, y) for fn_eval in fns_eval]
+    return scores
 
 if __name__ == "__main__":
 

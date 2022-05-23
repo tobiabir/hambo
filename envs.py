@@ -76,10 +76,6 @@ class WrapperEnv(gym.core.Wrapper):
 
 class WrapperEnvMountainCar(WrapperEnv):
 
-    def reward(self, state, action, state_next):
-        reward = self.done(state_next) * 100 - 0.1 * action[..., 0]**2
-        return reward
-
     def done(self, state):
         position = state[..., 0]
         velocity = state[..., 1]
@@ -90,14 +86,6 @@ class WrapperEnvMountainCar(WrapperEnv):
 
 class WrapperEnvPendulum(WrapperEnv):
 
-    def reward(self, state, action, state_next):
-        th = np.sign(np.arcsin(state_next[..., 1])
-                     ) * np.arccos(state_next[..., 0])
-        thdot = state_next[..., 2]
-        action = np.clip(action, -self.env.max_torque, self.env.max_torque)[0]
-        costs = th**2 + 0.1 * thdot**2 + 0.001 * action**2
-        return -costs
-
     def done(self, state):
         if len(state.shape) == 2:
             return np.zeros(state.shape[0], dtype=np.bool_)
@@ -106,28 +94,19 @@ class WrapperEnvPendulum(WrapperEnv):
 
 class WrapperEnvInvertedPendulum(WrapperEnv):
 
-    def reward(self, state, action, state_next):
-        if len(state.shape) == 2:
-            return np.ones(state.shape[0], dtype=np.float32)
-        return 1.0
-
     def done(self, state):
         return np.abs(state[..., 1]) > 0.2
 
+
 class WrapperEnvSwimmer(WrapperEnv):
 
-    def reward(self, state, action, state_next):
-        raise NotImplementedError
-    
     def done(self, state):
         if len(state.shape) == 2:
             return np.zeros(state.shape[0], dtype=np.bool_)
         return False
 
-class WrapperEnvHopper(WrapperEnv):
 
-    def reward(self, state, action, state_next):
-        raise NotImplementedError
+class WrapperEnvHopper(WrapperEnv):
 
     def done(self, state):
         height = state[..., 0]
@@ -138,16 +117,6 @@ class WrapperEnvHopper(WrapperEnv):
 
 
 class WrapperEnvHalfCheetah(WrapperEnv):
-
-    def reward(self, state, action, state_next):
-        pos_x = state[..., 0]
-        pos_x_next = state_next[..., 0]
-        velocity_x = (pos_x_next - pos_x) / self.env.dt
-        reward_forward = self.unwrapped._forward_reward_weight * velocity_x
-        cost_ctrl = self.unwrapped._ctrl_cost_weight * \
-            np.sum(np.square(action), axis=-1)
-        reward = reward_forward - cost_ctrl
-        return reward
 
     def done(self, state):
         if len(state.shape) == 2:
@@ -177,8 +146,9 @@ class EnvModel(gym.core.Env):
             x = torch.cat((state, action), dim=-1)
             y_means, y_stds = self.model_transition(x)
             size_batch = x.shape[0]
-            idxs_model = np.random.choice(self.model_transition.idxs_elites, size_batch)
-            idxs_batch = np.arange(0, size_batch)
+            idxs_idxs_elites = torch.randint(0, self.model.num_elites, (size_batch,), device=self.device)
+            idxs_model = self.model_transition.idxs_elites[idxs_idxs_elites]
+            idxs_batch = torch.arange(0, size_batch, device=self.device)
             y_mean = y_means[idxs_model, idxs_batch]
             y_std = y_stds[idxs_model, idxs_batch]
             y_mean, y_std = self.model_transition.scaler_y.inverse_transform(y_mean, y_std)

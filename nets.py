@@ -46,7 +46,7 @@ class NetDense(torch.nn.Module):
         self.scaler_y = utils.ScalerStandard()
         self.size_ensemble = size_ensemble
         self.num_elites = num_elites
-        self.idxs_elites = torch.arange(0, num_elites, dtype=torch.int64)
+        self.idxs_elites = torch.arange(0, num_elites)
         self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)), requires_grad=False)
         self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)), requires_grad=False)
 
@@ -92,8 +92,10 @@ class NetGaussHomo(NetDense):
 
     def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
         super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites)
-        self.stds_log = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, 1,dim_y)))
-        torch.nn.init.kaiming_uniform_(self.stds_log, a=math.sqrt(5))
+        stds_log = torch.zeros((size_ensemble, 1, dim_y))
+        torch.nn.init.kaiming_uniform_(stds_log, a=math.sqrt(5))
+        stds_log -= 5
+        self.stds_log = torch.nn.parameter.Parameter(stds_log)
         self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)))
         self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)))
 

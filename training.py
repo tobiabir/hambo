@@ -57,11 +57,12 @@ def train_ensemble_map(model, dataset, args):
         loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
         if weight_regularizer > 0:
             distr_standard_normal = torch.distributions.Normal(0,1)
-            for parameter in model.layers.parameters():
-                loss -= weight_regularizer * distr_standard_normal.log_prob(parameter).sum(dim=(1,2))
+            for name, parameter in model.layers.named_parameters():
+                if "weight" in name:
+                    loss -= weight_regularizer * distr_standard_normal.log_prob(parameter).sum(dim=(1,2))
         return loss
 
-    losses_eval_best = evaluation.evaluate_model(model, dataset_eval, fn_loss, args.device)
+    losses_eval_best = evaluation.evaluate_model(model, dataset_eval, [fn_loss], args.device)[0]
     state_dicts_best = [model.layers.state_dict()] * model.size_ensemble
     idxs_epoch_best = - np.ones(model.size_ensemble)
     idx_epoch_curr = 0
@@ -79,7 +80,7 @@ def train_ensemble_map(model, dataset, args):
             loss.backward()
             optimizer.step()
             idx_step += 1
-        losses_eval_curr = evaluation.evaluate_model(model, dataset_eval, fn_loss, args.device)
+        losses_eval_curr = evaluation.evaluate_model(model, dataset_eval, [fn_loss], args.device)[0]
         state_dict = model.layers.state_dict()
         for idx_model in range(model.size_ensemble):
             if losses_eval_curr[idx_model] < losses_eval_best[idx_model]:
@@ -91,9 +92,11 @@ def train_ensemble_map(model, dataset, args):
     for idx_model in range(model.size_ensemble):
         model.load_state_dict_single(state_dicts_best[idx_model], idx_model)
 
-    model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites].cpu()
+    model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites]
 
-    return losses_eval_best
+    scores_calibration_eval = evaluation.evaluate_model(model, dataset_eval, [utils.get_scores_calibration], args.device)[0]
+
+    return losses_eval_best, scores_calibration_eval
         
 def train_sac(agent, env, dataset_env, dataset_model, args, idx_step_start=0):
     if "interval_eval_agent" in args:

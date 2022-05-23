@@ -179,12 +179,13 @@ if __name__ == "__main__":
             state = env.reset()
         dataset_states_initial.append(state)
         if (idx_step + 1) % args.interval_train_model == 0:
-            losses_model = training.train_ensemble_map(model, dataset_env, args)
+            losses_model, scores_calibration = training.train_ensemble_map(model, dataset_env, args)
             loss_model = losses_model.mean()
+            score_calibration = scores_calibration.mean()
             std_log_min = model.std_log_min.mean()
             std_log_max = model.std_log_max.mean()
-            wandb.log({"loss_model": loss_model, "std_log_min": std_log_min, "std_log_max": std_log_max, "idx_step": idx_step})
-            print(f"idx_step: {idx_step}, loss_model: {loss_model}, std_log_min: {model.std_log_min.mean()}, std_log_max: {model.std_log_max.mean()}")
+            wandb.log({"loss_model": loss_model, "score_calibration": score_calibration, "std_log_min": std_log_min, "std_log_max": std_log_max, "idx_step": idx_step})
+            print(f"idx_step: {idx_step}, loss_model: {loss_model}, score_calibration: {score_calibration}, std_log_min: {model.std_log_min.mean()}, std_log_max: {model.std_log_max.mean()}")
             has_trained_model = True
         if has_trained_model and (idx_step + 1) % args.interval_rollout_model == 0:
             model.eval()
