@@ -103,6 +103,7 @@ class NetGaussHomo(NetDense):
         means = y
         stds_log = self.std_log_max - torch.nn.functional.softplus(self.std_log_max - self.stds_log)
         stds_log = self.std_log_min + torch.nn.functional.softplus(self.stds_log - self.std_log_min)
+        stds_log = stds_log.repeat(1, means.shape[1], 1)
         if len(means.shape) == 2:
             stds_log = stds_log.squeeze(dim=1)
         stds = stds_log.exp()
