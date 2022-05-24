@@ -53,13 +53,14 @@ def train_ensemble_map(model, dataset, args):
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model)
 
-    def fn_loss(y_pred_mean, y_pred_std, y_train, weight_regularizer=0.0):
+    def fn_loss(y_pred_mean, y_pred_std, y_train, scale_prior_weight=0.0, scale_prior_std=0.0):
         loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
-        if weight_regularizer > 0:
+        loss -= scale_prior_std * torch.distributions.Normal(-5, 1).log_prob(torch.log(y_pred_std)).sum(dim=2).mean(dim=1)
+        if scale_prior_weight > 0:
             distr_standard_normal = torch.distributions.Normal(0,1)
             for name, parameter in model.layers.named_parameters():
                 if "weight" in name:
-                    loss -= weight_regularizer * distr_standard_normal.log_prob(parameter).sum(dim=(1,2))
+                    loss -= scale_prior_weight * distr_standard_normal.log_prob(parameter).sum(dim=(1,2))
         return loss
 
     losses_eval_best = evaluation.evaluate_model(model, dataset_eval, [fn_loss], args.device)[0]
@@ -74,7 +75,7 @@ def train_ensemble_map(model, dataset, args):
             y_pred_means, y_pred_stds = model(x)
             y = torch.cat((reward, state_next - state), dim=-1).to(args.device)
             y = model.scaler_y.transform(y)
-            loss_map = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
+            loss_map = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model, 1.0).sum()
             loss = loss_map + 0.01 * model.std_log_max.sum() - 0.01 * model.std_log_min.sum()
             optimizer.zero_grad()
             loss.backward()

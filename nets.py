@@ -94,7 +94,6 @@ class NetGaussHomo(NetDense):
         super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites)
         stds_log = torch.zeros((size_ensemble, 1, dim_y))
         torch.nn.init.kaiming_uniform_(stds_log, a=math.sqrt(5))
-        stds_log -= 5
         self.stds_log = torch.nn.parameter.Parameter(stds_log)
         self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)))
         self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)))
