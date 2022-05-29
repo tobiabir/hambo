@@ -36,7 +36,7 @@ def train_ensemble_map(model, dataset, args):
     def fn_loss(y_pred_mean, y_pred_std, y_train, scale_prior_weight=0.0):
         loss_mle = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
         distr_prior = torch.distributions.Normal(0, 1)
-        loss_prior = torch.zeros(loss_mle.shape)
+        loss_prior = torch.zeros(loss_mle.shape, device=loss_mle.device)
         for name, parameter in model.named_parameters():
             if "weight" in name:
                 loss_prior -= scale_prior_weight * distr_prior.log_prob(parameter).sum(dim=(1,2))
