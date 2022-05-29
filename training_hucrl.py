@@ -48,7 +48,7 @@ if __name__ == "__main__":
                         help="regularizer weight alpha of the entropy regularization term for sac training (default: 0.05)")
     parser.add_argument("--learn_alpha", default=False, action="store_true",
                         help="set to learn alpha (default: False)")
-    parser.add_argument("--lr_model", type=float, default=0.0001,
+    parser.add_argument("--lr_model", type=float, default=0.001,
                         help="learning rate (default: 0.001)")
     parser.add_argument("--lr_agent", type=float, default=0.0003,
                         help="learning rate (default: 0.0003)")

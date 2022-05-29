@@ -24,9 +24,10 @@ class LayerLinear(torch.nn.Module):
         # Setting a=sqrt(5) in kaiming_uniform is the same as initializing with
         # uniform(-1/sqrt(in_features), 1/sqrt(in_features)). For details, see
         # https://github.com/pytorch/pytorch/issues/57109
-        torch.nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        for idx_model in range(self.weight.shape[0]):
+            torch.nn.init.kaiming_uniform_(self.weight[idx_model], a=math.sqrt(5))
         if self.bias is not None:
-            fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weight)
+            _, fan_in = torch.nn.init._calculate_fan_in_and_fan_out(self.weight[0])
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             torch.nn.init.uniform_(self.bias, -bound, bound)
 

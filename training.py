@@ -18,30 +18,10 @@ def train_gp(model, dataset, args):
         model.step() 
     return model
 
-def train_ensemble(model, dataset, args):
-    model.train()
-    dataloader = utils.get_dataloader(dataset, args.num_steps_train_model, args.size_batch)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    def fn_loss(y_pred, y_train):
-        y_train = y_train.repeat(model.size_ensemble, 1, 1)
-        losses = torch.nn.functional.mse_loss(y_pred, y_train, reduction="none")
-        losses = torch.mean(losses, dim=(1,2))
-        loss = torch.sum(losses)
-        return loss
-    for state, action, reward, state_next, done in dataloader:
-        state_action = torch.cat((state, action), dim=-1).to(args.device)
-        state_next_pred = model(state_action)
-        state_next = state_next.to(args.device)
-        loss = fn_loss(state_next_pred, state_next)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-    return model
-
 
 def train_ensemble_map(model, dataset, args):
     model.train()
-    len_train = int(0.8 * len(dataset))
+    len_train = int(0.9 * len(dataset))
     len_eval = len(dataset) - len_train
     dataset_train, dataset_eval = torch.utils.data.random_split(dataset, [len_train, len_eval])
     utils.preprocess(model, dataset_train, args.device)
@@ -53,14 +33,14 @@ def train_ensemble_map(model, dataset, args):
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model)
 
-    def fn_loss(y_pred_mean, y_pred_std, y_train, scale_prior_weight=0.0, scale_prior_std=0.0):
-        loss = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
-        loss -= scale_prior_std * torch.distributions.Normal(-5, 1).log_prob(torch.log(y_pred_std)).sum(dim=2).mean(dim=1)
-        if scale_prior_weight > 0:
-            distr_standard_normal = torch.distributions.Normal(0,1)
-            for name, parameter in model.layers.named_parameters():
-                if "weight" in name:
-                    loss -= scale_prior_weight * distr_standard_normal.log_prob(parameter).sum(dim=(1,2))
+    def fn_loss(y_pred_mean, y_pred_std, y_train, scale_prior_weight=0.0):
+        loss_mle = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
+        distr_prior = torch.distributions.Normal(0, 1)
+        loss_prior = torch.zeros(loss_mle.shape)
+        for name, parameter in model.named_parameters():
+            if "weight" in name:
+                loss_prior -= scale_prior_weight * distr_prior.log_prob(parameter).sum(dim=(1,2))
+        loss = loss_prior + loss_mle
         return loss
 
     losses_eval_best = evaluation.evaluate_model(model, dataset_eval, [fn_loss], args.device)[0]
@@ -75,7 +55,7 @@ def train_ensemble_map(model, dataset, args):
             y_pred_means, y_pred_stds = model(x)
             y = torch.cat((reward, state_next - state), dim=-1).to(args.device)
             y = model.scaler_y.transform(y)
-            loss_map = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model, 1.0).sum()
+            loss_map = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
             loss = loss_map + 0.01 * model.std_log_max.sum() - 0.01 * model.std_log_min.sum()
             optimizer.zero_grad()
             loss.backward()
