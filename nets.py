@@ -54,7 +54,7 @@ class NetDense(torch.nn.Module):
     def _apply_layers(self, x):
         x = self.scaler_x.transform(x)
         x = x.repeat(self.size_ensemble, 1, 1)
-        y = self.layers(x).squeeze(dim=1)
+        y = self.layers(x)
         return y 
 
     def _extract_distrs(self, y):
@@ -148,6 +148,7 @@ class PolicyGauss(torch.nn.Module):
 
     def forward(self, state):
         mean, std = self.net.get_distr(state)
+        mean, std = mean.squeeze(dim=0), std.squeeze(dim=0)
         distr = torch.distributions.Normal(mean, std)
         action = distr.rsample()
         prob_log = distr.log_prob(action)
