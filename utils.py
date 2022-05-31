@@ -76,17 +76,26 @@ class ScalerStandard():
     def __init__(self):
         self.mean = 0.0
         self.std = 1.0
+        self.active = True
+
+    def activate(self):
+        self.active = True
+
+    def deactivate(self):
+        self.active = False
 
     def fit(self, data):
         self.mean = torch.mean(data, dim=0)
         self.std = torch.std(data, dim=0)
 
     def transform(self, data):
-        return data
+        if not self.active:
+            return data
         return (data - self.mean) / self.std
 
     def inverse_transform(self, data_mean, data_std):
-        return data_mean, data_std
+        if not self.active:
+            return data_mean, data_std
         mean = self.mean + data_mean * self.std
         std = data_std * self.std
         return mean, std

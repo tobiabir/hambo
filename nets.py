@@ -34,7 +34,7 @@ class LayerLinear(torch.nn.Module):
 
 class NetDense(torch.nn.Module):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
         super().__init__()
         self.layers = torch.nn.Sequential()
         self.layers.append(LayerLinear(dim_x, dim_h, size_ensemble))
@@ -45,6 +45,9 @@ class NetDense(torch.nn.Module):
         self.layers.append(LayerLinear(dim_h, dim_y, size_ensemble))
         self.scaler_x = utils.ScalerStandard()
         self.scaler_y = utils.ScalerStandard()
+        if not use_scalers:
+            self.scaler_x.deactivate()
+            self.scaler_y.deactivate()
         self.size_ensemble = size_ensemble
         self.num_elites = num_elites
         self.idxs_elites = torch.arange(0, num_elites)
@@ -91,8 +94,8 @@ class NetDense(torch.nn.Module):
 
 class NetGaussHomo(NetDense):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
-        super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites)
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
+        super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers)
         stds_log = torch.zeros((size_ensemble, 1, dim_y))
         torch.nn.init.kaiming_uniform_(stds_log, a=math.sqrt(5))
         self.stds_log = torch.nn.parameter.Parameter(stds_log)
@@ -112,8 +115,8 @@ class NetGaussHomo(NetDense):
 
 class NetGaussHetero(NetDense):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1):
-        super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites)
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
+        super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers)
         self.dim_y = dim_y
         self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)))
         self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)))

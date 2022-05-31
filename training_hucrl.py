@@ -26,6 +26,8 @@ if __name__ == "__main__":
                         help="discount factor for reward (default: 0.99)")
     parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilisticHomoscedastic", "EnsembleProbabilisticHeteroscedastic"], default="EnsembleProbabilisticHeteroscedastic",
                         help="what type of model to use to learn dyamics of the environment (default: EnsembleProbabilisticHeteroscedastic)")
+    parser.add_argument("--use_scalers", default=False, action="store_true",
+                        help="set to use scalers for transition model (default: False)")
     parser.add_argument("--num_h_model", type=int, default=2,
                         help="number of hidden layers in model (only for ensembles) (default: 2)")
     parser.add_argument("--dim_h_model", type=int, default=256,
@@ -143,6 +145,7 @@ if __name__ == "__main__":
         dim_h=args.dim_h_model,
         size_ensemble=args.size_ensemble_model,
         num_elites=args.num_elites_model,
+        use_scalers=args.use_scalers,
     ).to(args.device)
     if args.hallucinate:
         EnvModel = envs.EnvModelHallucinated
