@@ -136,6 +136,7 @@ class EnvModel(gym.core.Env):
         self.dataset_states_initial = dataset_states_initial
         self.model_transition = model_transition
         self.model_termination = model_termination
+        self.use_gauss_approx = args.use_gauss_approx
         self.use_aleatoric = args.use_aleatoric
         self.device = args.device
 
@@ -144,23 +145,25 @@ class EnvModel(gym.core.Env):
             state = torch.tensor(state, dtype=torch.float32, device=self.device)
             action = torch.tensor(action, dtype=torch.float32, device=self.device)
             x = torch.cat((state, action), dim=-1)
-            y_means, y_stds = self.model_transition(x)
-            size_batch = x.shape[0]
-            idxs_idxs_elites = torch.randint(0, self.model_transition.num_elites, (size_batch,), device=self.device)
-            idxs_model = self.model_transition.idxs_elites[idxs_idxs_elites]
-            idxs_batch = torch.arange(0, size_batch, device=self.device)
-            y_mean = y_means[idxs_model, idxs_batch]
-            y_std = y_stds[idxs_model, idxs_batch]
-            y_mean, y_std = self.model_transition.scaler_y.inverse_transform(y_mean, y_std)
-            if self.use_aleatoric:
-                y = torch.distributions.Normal(y_mean, y_std).sample()
+            if self.use_gauss_approx:
+                y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
+                if self.use_aleatoric:
+                    y = torch.distributions.Normal(y_mean, y_std).sample()
+                else:
+                    y = torch.distributions.Normal(y_mean, y_std_epistemic).sample()
             else:
-                y = y_mean
-            #y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
-            #if self.use_aleatoric:
-            #    y = torch.distributions.Normal(y_mean, y_std).sample()
-            #else:
-            #    y = torch.distributions.Normal(y_mean, y_std_epistemic).sample()
+                y_means, y_stds = self.model_transition(x)
+                size_batch = x.shape[0]
+                idxs_idxs_elites = torch.randint(0, self.model_transition.num_elites, (size_batch,), device=self.device)
+                idxs_model = self.model_transition.idxs_elites[idxs_idxs_elites]
+                idxs_batch = torch.arange(0, size_batch, device=self.device)
+                y_mean = y_means[idxs_model, idxs_batch]
+                y_std = y_stds[idxs_model, idxs_batch]
+                y_mean, y_std = self.model_transition.scaler_y.inverse_transform(y_mean, y_std)
+                if self.use_aleatoric:
+                    y = torch.distributions.Normal(y_mean, y_std).sample()
+                else:
+                    y = y_mean
             reward = y[:, :1]
             state_next = state + y[:, 1:]
             state_next = torch.clamp(
