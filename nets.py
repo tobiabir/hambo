@@ -4,7 +4,7 @@ import torch
 import utils
 
 STD_LOG_MIN = -10
-STD_LOG_MAX = 0.5
+STD_LOG_MAX = 1
 EPS = 1e-6
 
 class LayerLinear(torch.nn.Module):
@@ -51,8 +51,6 @@ class NetDense(torch.nn.Module):
         self.size_ensemble = size_ensemble
         self.num_elites = num_elites
         self.idxs_elites = torch.arange(0, num_elites)
-        self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)), requires_grad=False)
-        self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)), requires_grad=False)
 
     def _apply_layers(self, x):
         x = self.scaler_x.transform(x)
@@ -99,13 +97,11 @@ class NetGaussHomo(NetDense):
         stds_log = torch.zeros((size_ensemble, 1, dim_y))
         torch.nn.init.kaiming_uniform_(stds_log, a=math.sqrt(5))
         self.stds_log = torch.nn.parameter.Parameter(stds_log)
-        self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)))
-        self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)))
 
     def _extract_distrs(self, y):
         means = y
-        stds_log = self.std_log_max - torch.nn.functional.softplus(self.std_log_max - self.stds_log)
-        stds_log = self.std_log_min + torch.nn.functional.softplus(self.stds_log - self.std_log_min)
+        stds_log = STD_LOG_MAX - torch.nn.functional.softplus(STD_LOG_MAX - self.stds_log)
+        stds_log = STD_LOG_MIN + torch.nn.functional.softplus(self.stds_log - STD_LOG_MIN)
         stds_log = stds_log.repeat(1, means.shape[1], 1)
         if len(means.shape) == 2:
             stds_log = stds_log.squeeze(dim=1)
@@ -118,14 +114,12 @@ class NetGaussHetero(NetDense):
     def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
         super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers)
         self.dim_y = dim_y
-        self.std_log_max = torch.nn.parameter.Parameter(STD_LOG_MAX * torch.ones((1, dim_y)))
-        self.std_log_min = torch.nn.parameter.Parameter(STD_LOG_MIN * torch.ones((1, dim_y)))
     
     def _extract_distrs(self, y):
         means = y[..., :self.dim_y]
         stds_log = y[..., self.dim_y:]
-        stds_log = self.std_log_max - torch.nn.functional.softplus(self.std_log_max - stds_log)
-        stds_log = self.std_log_min + torch.nn.functional.softplus(stds_log - self.std_log_min)
+        stds_log = STD_LOG_MAX - torch.nn.functional.softplus(STD_LOG_MAX - stds_log)
+        stds_log = STD_LOG_MIN + torch.nn.functional.softplus(stds_log - STD_LOG_MIN)
         stds = stds_log.exp()
         return means, stds
 
