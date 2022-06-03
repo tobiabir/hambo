@@ -36,6 +36,7 @@ class NetDense(torch.nn.Module):
 
     def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
         super().__init__()
+        self.dim_x = dim_x
         self.layers = torch.nn.Sequential()
         self.layers.append(LayerLinear(dim_x, dim_h, size_ensemble))
         self.layers.append(torch.nn.ReLU())

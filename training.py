@@ -51,7 +51,7 @@ def train_ensemble_map(model, dataset, args):
     while (idx_epoch_curr - 5 <= idxs_epoch_best).any():
         model.train()
         for state, action, reward, state_next, done in dataloader_train:
-            x = torch.cat((state, action), dim=-1).to(args.device)
+            x = torch.cat((state, action), dim=-1)[:, :model.dim_x].to(args.device)
             y_pred_means, y_pred_stds = model(x)
             y = torch.cat((reward, state_next - state), dim=-1).to(args.device)
             y = model.scaler_y.transform(y)

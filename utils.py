@@ -40,7 +40,7 @@ def set_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio, num_workers=2):
+def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio, num_workers=1):
     dataset = torch.utils.data.ConcatDataset((dataset1, dataset2))
     num_samples = num_batches * size_batch
     #sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=num_samples)
@@ -64,12 +64,6 @@ def get_scores_calibration(y_pred_means, y_pred_stds, y_train):
     scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
     return scores
 
-
-def startup(env, agent, dataset, dataset_states_initial, num_steps_rollout):
-    if num_steps_rollout <= 0:
-        return
-    agent_random = agents.AgentRandom(env.action_space)
-    rollout.rollout_steps(env, agent_random, dataset, dataset_states_initial, num_steps_rollout)
 
 class ScalerStandard():
     
@@ -104,7 +98,7 @@ class ScalerStandard():
 def preprocess(model, dataset, device="cpu"):
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
     state, action, reward, state_next, _ = next(iter(dataloader))
-    x = torch.cat((state, action), dim=-1).to(device)
+    x = torch.cat((state, action), dim=-1)[:, :model.dim_x].to(device)
     y = torch.cat((reward, state_next - state), dim=-1).to(device)
     model.scaler_x.fit(x)
     model.scaler_y.fit(y)

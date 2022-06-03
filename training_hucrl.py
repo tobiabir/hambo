@@ -12,6 +12,7 @@ import data
 import envs
 import evaluation
 import nets
+import rollout
 import training
 import utils
 
@@ -159,7 +160,7 @@ if __name__ == "__main__":
     env_eval = copy.deepcopy(env)
     has_trained_model = False
 
-    agent_random = agents.AgentRandom(env.action_space)
+    agent_random = agents.AgentRandom(env_model.action_space)
     agent = agents.AgentSAC(env_model.observation_space, env_model.action_space, args)
 
     dataset_env = data.DatasetSARS(capacity=args.replay_size)
@@ -170,15 +171,15 @@ if __name__ == "__main__":
     dataset_states_initial.append(state)
 
     print("startup...")
-    utils.startup(env, agent, dataset_env, dataset_states_initial, args.num_steps_startup) 
+    rollout.rollout_steps(env, agent_random, dataset_env, dataset_states_initial, args.num_steps_startup)
     args.idx_step += args.num_steps_startup
 
     state = env.state
 
     for idx_step in range(args.num_steps_startup, args.num_steps):
         agent.train()
-        action = agent.get_action(state)[:dim_action]
-        state_next, reward, done, info = env.step(action)
+        action = agent.get_action(state)
+        state_next, reward, done, info = env.step(action[:dim_action])
         mask = float(done and not info["TimeLimit.truncated"]) 
         dataset_env.push(state, action, reward, state_next, mask)
         state = state_next
