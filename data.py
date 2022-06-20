@@ -18,6 +18,9 @@ class DatasetNumpy(torch.utils.data.Dataset):
     def append(self, x):
         self.data.append(x)
 
+    def append_batch(self, batch):
+        self.data += batch
+
     def sample(self, num, replacement=True):
         if replacement:
             batch = random.choices(self.data, k=num)

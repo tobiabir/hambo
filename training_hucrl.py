@@ -99,8 +99,13 @@ if __name__ == "__main__":
         else:
             args.device = "cpu"
     print(f"device: {args.device}")
+    args.weight_penalty_reward = 0.0
+    args.conservative = False
 
-    wandb.init(project="Master Thesis", entity="tobiabir", config=args)
+    wandb.init(mode="disabled", project="Master Thesis", entity="tobiabir", config=args)
+
+    # setting rng seeds
+    utils.set_seeds(args.seed)
 
     if args.name_env == "Point":
         env = envs.EnvPoint()
@@ -130,9 +135,6 @@ if __name__ == "__main__":
     args.idx_step = 0
     args.idx_step_agent_global = 0
 
-    # setting rng seeds
-    utils.set_seeds(args.seed)
-    
     if args.model == "GP":
         Model = None # TODO
     elif args.model == "EnsembleDeterministic":
@@ -206,7 +208,7 @@ if __name__ == "__main__":
             wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}, alpha: {agent.alpha}")
         if (idx_step + 1) % args.interval_eval_agent == 0:
-            return_eval = evaluation.evaluate(agent, env_eval, args.num_episodes_eval)
+            return_eval = evaluation.evaluate_agent(agent, env_eval, args.num_episodes_eval)
             wandb.log({"return_eval": return_eval, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, return_eval: {return_eval}")
         args.idx_step = idx_step

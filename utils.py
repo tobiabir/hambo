@@ -127,32 +127,15 @@ class SamplerBatchRatio():
         return self.num_batches
 
 
-class SchedulerLinear():
-
-    def __init__(self, val_init, val_target, step_start, step_end):
-        self.val_init = val_init
-        self.val_target=  val_target
-        self.step_start = step_start
-        self.step_end = step_end
-        self.step_curr = -1
-    
-    def next(self):
-        self.step_curr += 1
-        
-        if self.step_curr >= self.step_end:
-            return self.val_target
-        elif self.step_curr <= self.step_start:
-            return self.val_init
-        else:
-            return self.val_init + (self.val_target - self.val_init) * ((self.step_curr - self.step_start) * 1.0 / (self.step_end - self.step_start))
+def get_mean_std_of_mixture(means, stds, epistemic=False):
+    mean = torch.mean(means, dim=0)
+    var_aleatoric = torch.mean(stds**2, dim=0)
+    var_epistemic = torch.var(means, dim=0, unbiased=False)
+    var = var_aleatoric + var_epistemic
+    std = torch.sqrt(var)
+    if epistemic:
+        std_epistemic = torch.sqrt(var_epistemic)
+        return mean, std, std_epistemic
+    return mean, std
 
 
-class Wrapper:
-      
-    def __init__(self, obj):
-        self.obj = obj
-          
-    def __getattr__(self, attr):
-        if attr in self.__dict__:
-            return getattr(self, attr)
-        return getattr(self.obj, attr)

@@ -84,6 +84,8 @@ class AgentSAC(Agent):
             self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=args.lr_agent)
         else:
             self.alpha = args.alpha
+        self.conservative = args.conservative
+        self.weight_conservative = 5.0
         self.training = True
 
     def eval(self):
@@ -117,6 +119,30 @@ class AgentSAC(Agent):
         q1, q2 = self.critic(state, action)
         loss_q1 = torch.nn.functional.mse_loss(q1, q_target)
         loss_q2 = torch.nn.functional.mse_loss(q2, q_target)
+
+        if self.conservative:
+            num_samples = 10
+            action_random = torch.distributions.Uniform(-1, 1).sample((q1.shape[0] * num_samples, action.shape[-1])).to(self.device)
+            prob_log_random = np.log(0.5 ** action_random.shape[-1])
+            state_tmp = state.unsqueeze(dim=1).repeat(1, num_samples, 1).reshape(-1, state.shape[-1])
+            state_next_tmp = state_next.unsqueeze(dim=1).repeat(1, num_samples, 1).reshape(-1, state.shape[-1])
+            action, _, prob_log = self.policy(state_tmp)
+            action_next, _, prob_log_next = self.policy(state_next_tmp)
+            q1_random, q2_random = self.critic(state_tmp, action_random)
+            q1_curr, q2_curr = self.critic(state_tmp, action)
+            q1_next, q2_next = self.critic(state_tmp, action_next)
+
+            cat_q1 = torch.cat([q1_random - prob_log_random, q1_next - prob_log_next.detach(), q1_curr - prob_log.detach()], dim=1)
+            cat_q2 = torch.cat([q2_random - prob_log_random, q2_next - prob_log_next.detach(), q2_curr - prob_log.detach()], dim=1)
+                
+            loss_q1_conservative = torch.logsumexp(cat_q1, dim=1,).mean()
+            loss_q2_conservative = torch.logsumexp(cat_q2, dim=1,).mean()
+            loss_q1_conservative = loss_q1_conservative - q1.mean()
+            loss_q2_conservative = loss_q2_conservative - q2.mean()
+            
+            loss_q1 += self.weight_conservative * loss_q1_conservative
+            loss_q2 += self.weight_conservative * loss_q2_conservative
+
         loss_q = loss_q1 + loss_q2
         self.optim_critic.zero_grad()
         loss_q.backward()

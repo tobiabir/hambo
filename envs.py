@@ -138,6 +138,7 @@ class EnvModel(gym.core.Env):
         self.model_termination = model_termination
         self.use_gauss_approx = args.use_gauss_approx
         self.use_aleatoric = args.use_aleatoric
+        self.weight_penalty_reward = args.weight_penalty_reward
         self.device = args.device
 
     def _step(self, state, action):
@@ -145,14 +146,18 @@ class EnvModel(gym.core.Env):
             state = torch.tensor(state, dtype=torch.float32, device=self.device)
             action = torch.tensor(action, dtype=torch.float32, device=self.device)
             x = torch.cat((state, action), dim=-1)
+            y_means, y_stds = self.model_transition(x)
             if self.use_gauss_approx:
-                y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
+                idxs_elites = self.model_transition.idxs_elites
+                y_means, y_stds = y_means[idxs_elites], y_stds[idxs_elites]
+                y_mean, y_std, y_std_epistemic = utils.get_mean_std_of_mixture(y_means, y_stds, epistemic=True)
                 if self.use_aleatoric:
+                    y_mean, y_std = self.model_transition.scaler_y.inverse_transform(y_mean, y_std)
                     y = torch.distributions.Normal(y_mean, y_std).sample()
                 else:
+                    y_mean, y_std_epistemic = self.model_transition.scaler_y.inverse_transform(y_mean, y_std_epistemic)
                     y = torch.distributions.Normal(y_mean, y_std_epistemic).sample()
             else:
-                y_means, y_stds = self.model_transition(x)
                 size_batch = x.shape[0]
                 idxs_idxs_elites = torch.randint(0, self.model_transition.num_elites, (size_batch,), device=self.device)
                 idxs_model = self.model_transition.idxs_elites[idxs_idxs_elites]
@@ -165,6 +170,8 @@ class EnvModel(gym.core.Env):
                 else:
                     y = y_mean
             reward = y[:, :1]
+            penalty_reward = torch.amax(torch.linalg.norm(y_stds, dim=2), dim=0).unsqueeze(dim=1)
+            reward -= self.weight_penalty_reward * penalty_reward 
             state_next = state + y[:, 1:]
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
@@ -211,7 +218,7 @@ class EnvModel(gym.core.Env):
 
 class EnvModelHallucinated(EnvModel):
 
-    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args, beta=1.):
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args, beta=1.0):
         super().__init__(space_observation, space_action, dataset_states_initial,
                          model_transition, model_termination, args)
         self.space_action_hallucinated = gym.spaces.Box(
@@ -220,13 +227,12 @@ class EnvModelHallucinated(EnvModel):
 
     def _step(self, state, action):
         with torch.no_grad():
+            state = torch.tensor(state, dtype=torch.float32, device=self.device)
+            action = torch.tensor(action, dtype=torch.float32, device=self.device)
             dim_action = self.space_action.shape[0]
             action_hallucinated = action[:, dim_action:]
-            action_hallucinated = torch.tensor(
-                action_hallucinated, dtype=torch.float32, device=self.device)
             action = action[:, :dim_action]
-            x = np.concatenate((state, action), axis=-1)
-            x = torch.tensor(x, dtype=torch.float32, device=self.device)
+            x = torch.cat((state, action), dim=-1)
             y_mean, y_std, y_std_epistemic = self.model_transition.get_distr(x, epistemic=True)
             reward_mean = y_mean[:, :1]
             reward_std = y_std[:, :1]
@@ -234,16 +240,17 @@ class EnvModelHallucinated(EnvModel):
             state_next_mean = y_mean[:, 1:]
             state_next_std = y_std[:, 1:]
             state_next_std_epistemic = y_std_epistemic[:, 1:]
-            state_next_var_epistemic = state_next_std_epistemic**2
-            state_next = state_next_mean + self.beta * state_next_var_epistemic * action_hallucinated
+            state_next = state_next_mean + self.beta * state_next_std_epistemic * action_hallucinated
             if self.use_aleatoric:
                 reward = torch.distributions.Normal(reward_mean, reward_std).sample()
                 state_next_var = state_next_std**2
+                state_next_var_epistemic = state_next_std_epistemic**2
                 state_next_var_aleatoric = state_next_var - state_next_var_epistemic
                 state_next_std_aleatoric = torch.sqrt(state_next_var_aleatoric)
                 state_next = torch.distributions.Normal(state_next, state_next_std_aleatoric).sample()
             else:
                 reward = torch.distributions.Normal(reward_mean, reward_std_epistemic).sample()
+            state_next += state
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
             reward = reward.squeeze().cpu().numpy()

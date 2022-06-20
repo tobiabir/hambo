@@ -8,7 +8,7 @@ import agents
 import envs
 import rollout
 
-def evaluate(agent, env, num_episodes):
+def evaluate_agent(agent, env, num_episodes):
     agent.eval()
     reward = 0
     for idx_episode in range(num_episodes):
