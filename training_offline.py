@@ -11,7 +11,7 @@ import agents
 import data
 import envs
 import evaluation
-import nets
+import models
 import training
 import utils
 
@@ -115,11 +115,11 @@ if __name__ == "__main__":
             if args.model == "GP":
                 Model = None # TODO
             elif args.model == "EnsembleDeterministic":
-                Model = nets.NetDense
+                Model = models.NetDense
             elif args.model == "EnsembleProbabilisticHomoscedastic":
-                Model = nets.NetGaussHomo
+                Model = models.NetGaussHomo
             elif args.model == "EnsembleProbabilisticHeteroscedastic":
-                Model = nets.NetGaussHetero
+                Model = models.NetGaussHetero
             model = Model(
                 dim_x=env.observation_space.shape[0] + env.action_space.shape[0],
                 dim_y=1 + env.observation_space.shape[0],

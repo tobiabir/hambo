@@ -1,7 +1,7 @@
 __pycache__
 .*
 !.gitignore
-tmp*
+*tmp*
 Logs
 lsf*
 wandb

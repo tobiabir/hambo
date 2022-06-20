@@ -3,7 +3,7 @@ import torch
 
 from abc import ABC, abstractmethod
 
-import nets
+import models
 import utils
 
 
@@ -64,15 +64,15 @@ class AgentSAC(Agent):
         dim_action = space_action.shape[0]
         num_h = 2
         dim_h = 256
-        self.critic = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
-        self.critic_target = nets.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic = models.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic_target = models.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_target.eval()
         self.optim_critic = torch.optim.Adam(
             self.critic.parameters(), lr=args.lr_agent)
         bound_action_low = space_action.low[0]
         bound_action_high = space_action.high[0]
-        self.policy = nets.PolicyGauss(
+        self.policy = models.PolicyGauss(
             dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high).to(self.device)
         self.optim_policy = torch.optim.Adam(
             self.policy.parameters(), lr=args.lr_agent)
