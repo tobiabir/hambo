@@ -1,0 +1,8 @@
+gym
+torch
+gpytorch
+wandb
+mujoco-py
+mujoco
+git+https://github.com/rail-berkeley/d4rl@master#egg=d4rl
+tqdm
