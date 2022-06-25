@@ -218,12 +218,12 @@ class EnvModel(gym.core.Env):
 
 class EnvModelHallucinated(EnvModel):
 
-    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args, beta=1.0):
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args):
         super().__init__(space_observation, space_action, dataset_states_initial,
                          model_transition, model_termination, args)
         self.space_action_hallucinated = gym.spaces.Box(
             low=-1, high=1, shape=space_observation.shape, dtype=np.float32)
-        self.beta = beta
+        self.beta = args.beta
 
     def _step(self, state, action):
         with torch.no_grad():

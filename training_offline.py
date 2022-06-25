@@ -48,6 +48,8 @@ if __name__ == "__main__":
                         help="weight on the reward penalty (see MOPO) (default: 0.0)")
     parser.add_argument("--hallucinate", default=False, action="store_true",
                         help="set to add hallucinated control (default: False)")
+    parser.add_argument("--beta", type=float, default=1.0,
+                        help="parameter for the amount of hallucinated control (only has effect if hallucinate is set) (default: 1.0)")
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
     parser.add_argument("--ratio_env_model", type=float, default=0.05,
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("--size_batch", type=int, default=256,
                         help="batch size (default: 256)")
     parser.add_argument("--num_epochs", type=int, default=128,
-                        help="number of episodes to evaluate (default: 128)")
+                        help="number of episodes to train (default: 128)")
     parser.add_argument("--interval_rollout_model", type=int, default=128,
                         help="interval of steps after which a round of training is done (default: 128)")
     parser.add_argument("--num_steps_rollout_model", type=int, default=128,

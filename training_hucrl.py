@@ -45,6 +45,8 @@ if __name__ == "__main__":
                         help="set to use aleatoric noise from transition model (default: False)")
     parser.add_argument("--hallucinate", default=False, action="store_true",
                         help="set to add hallucinated control (default: False)")
+    parser.add_argument("--beta", type=float, default=1.0,
+                        help="parameter for the amount of hallucinated control (only has effect if hallucinate is set) (default: 1.0)")
     parser.add_argument("--ratio_env_model", type=float, default=0.05,
                         help="ratio of env data to model data in agent batches")
     parser.add_argument("--tau", type=float, default=0.005,
