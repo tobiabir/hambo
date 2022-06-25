@@ -9,6 +9,7 @@ import models
 import rollout
 import utils
 
+
 def train_gp(model, dataset, args):
     state, action, reward, state_next, done = dataset.sample(len(dataset)) 
     state_action = torch.cat((state, action), dim=-1)
@@ -24,7 +25,7 @@ def train_ensemble_map(model, dataset, args):
     len_train = int(0.9 * len(dataset))
     len_eval = len(dataset) - len_train
     dataset_train, dataset_eval = torch.utils.data.random_split(dataset, [len_train, len_eval])
-    utils.preprocess(model, dataset_train, args.device)
+    data.preprocess(model, dataset_train, args.device)
     dataloader_train = torch.utils.data.DataLoader(
         dataset=dataset_train,
         batch_size=args.size_batch,
@@ -95,7 +96,7 @@ def train_sac(agent, env, dataset_env, dataset_model, args, idx_step_start=0):
         args.idx_step_agent_global += num_samples
         if idx_step % args.interval_train_agent_internal == 0:
             dataset = torch.utils.data.ConcatDataset((dataset_env, dataset_model))
-            dataloader = utils.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
+            dataloader = data.get_dataloader(dataset, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
                 loss_pi, loss_q, loss_alpha = agent.step(batch)
             wandb.log({"loss_critic": loss_q, "loss_actor": loss_pi, "alpha": args.alpha, "loss_alpha": loss_alpha, "idx_step": args.idx_step_agent_global - 1})

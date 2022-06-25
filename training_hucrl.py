@@ -202,7 +202,7 @@ if __name__ == "__main__":
             env_model = envs.WrapperEnv(env_model)
             env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
         if (idx_step + 1) % args.interval_train_agent == 0:
-            dataloader = utils.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
+            dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
             for batch in dataloader:
                 loss_actor, loss_critic, loss_alpha = agent.step(batch)
             wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_step": idx_step})

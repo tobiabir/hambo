@@ -6,7 +6,7 @@ from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.models import ExactGP 
 
-import utils
+import data
 
 STD_MIN = math.exp(-20)
 STD_MAX = math.exp(2)
@@ -110,8 +110,8 @@ class NetDense(torch.nn.Module):
             self.layers.append(LayerLinear(dim_h, dim_h, size_ensemble))
             self.layers.append(torch.nn.ReLU())
         self.layers.append(LayerLinear(dim_h, dim_y, size_ensemble))
-        self.scaler_x = utils.ScalerStandard()
-        self.scaler_y = utils.ScalerStandard()
+        self.scaler_x = data.ScalerStandard()
+        self.scaler_y = data.ScalerStandard()
         if not use_scalers:
             self.scaler_x.deactivate()
             self.scaler_y.deactivate()

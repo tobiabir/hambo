@@ -44,10 +44,14 @@ if __name__ == "__main__":
                         help="set to use gauss approximation instead of true mixture to sample from transition model (default: False)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
                         help="set to use aleatoric noise from transition model (default: False)")
+    parser.add_argument("--weight_penalty_reward", type=float, default=0.0,
+                        help="weight on the reward penalty (see MOPO) (default: 0.0)")
+    parser.add_argument("--hallucinate", default=False, action="store_true",
+                        help="set to add hallucinated control (default: False)")
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
     parser.add_argument("--ratio_env_model", type=float, default=0.05,
-                        help="ratio of env data to model data in agent batches")
+                        help="ratio of env data to model data in agent batches (default: 0.05)")
     parser.add_argument("--tau", type=float, default=0.005,
                         help="target smoothing coefficient (default: 0.005)")
     parser.add_argument("--alpha", type=float, default=0.05,
@@ -56,7 +60,7 @@ if __name__ == "__main__":
                         help="set to learn alpha (default: False)")
     parser.add_argument("--lr_agent", type=float, default=0.0003,
                         help="learning rate (default: 0.0003)")
-    parser.add_argument("--hallucinate", default=False, action="store_true",
+    parser.add_argument("--conservative", default=False, action="store_true",
                         help="set to add conservative Q learning (default: False)")
     parser.add_argument("--size_batch", type=int, default=256,
                         help="batch size (default: 256)")
@@ -103,6 +107,9 @@ if __name__ == "__main__":
     dataset_states_initial.append_batch(list(dataset_env["observations"]))
     state = torch.tensor(dataset_env["observations"], dtype=torch.float32)
     action = torch.tensor(dataset_env["actions"], dtype=torch.float32)
+    if args.hallucinate:
+        action_hallucinated = torch.zeros(state.shape, dtype=torch.float32)
+        action = torch.cat((action, action_hallucinated), dim=-1)
     reward = torch.tensor(dataset_env["rewards"], dtype=torch.float32).unsqueeze(dim=1)
     state_next = torch.tensor(dataset_env["next_observations"], dtype=torch.float32)
     terminal = torch.tensor(dataset_env["terminals"], dtype=torch.float32).unsqueeze(dim=1)
@@ -141,20 +148,26 @@ if __name__ == "__main__":
             model = torch.load(args.path_checkpoint_model)
 
         model.eval()
-        EnvModel = envs.EnvModel
+        if args.hallucinate:
+            EnvModel = envs.EnvModelHallucinated
+        else:
+            EnvModel = envs.EnvModel
         env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
         env_model = gym.wrappers.TimeLimit(env_model, args.max_length_rollout_model)
         env_model = envs.WrapperEnv(env_model)
 
     agent = agents.AgentSAC(env.observation_space, env.action_space, args)
+    if args.hallucinate:
+        agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
+        agent = agents.AgentConcat([agent, agent_antagonist])
 
     for idx_epoch in range(args.num_epochs):
         if use_model and (idx_epoch + 1) % args.interval_rollout_model == 0:
             env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
-        dataloader = utils.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
+        dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
         for batch in dataloader:
             loss_actor, loss_critic, loss_alpha = agent.step(batch)
-        print(f"idx_epoch: {idx_epoch}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}, alpha: {agent.alpha}")
+        print(f"idx_epoch: {idx_epoch}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}")
         if (idx_epoch + 1) % args.interval_eval_agent == 0:
             return_eval = evaluation.evaluate_agent(agent, env, args.num_episodes_eval)
             print(f"idx_epoch: {idx_epoch}, return_eval: {return_eval}")

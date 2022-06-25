@@ -8,6 +8,7 @@ import agents
 import envs
 import rollout
 
+
 def evaluate_agent(agent, env, num_episodes):
     agent.eval()
     reward = 0
@@ -16,6 +17,7 @@ def evaluate_agent(agent, env, num_episodes):
         reward += reward_episode
     reward_avg = reward / num_episodes
     return reward_avg
+
 
 def evaluate_model(model, dataset, fns_eval, device):
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
@@ -29,23 +31,3 @@ def evaluate_model(model, dataset, fns_eval, device):
         scores = [fn_eval(y_pred_means, y_pred_stds, y) for fn_eval in fns_eval]
     return scores
 
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description="HUCRL")
-    parser.add_argument("--num_episodes_eval", type=int, default=32, metavar="N",
-                        help="number of episodes (default: 32)")
-    parser.add_argument("--seed", type=int, default=42, metavar="N",
-                        help="random seed (default: 42)")
-    args = parser.parse_args()
-
-    env = envs.EnvPoint()
-
-    # setting rng seeds
-    random.seed(args.seed)    
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    env.reset(seed=args.seed)
-
-    agent = agents.AgentPointOptimal()
-
-    evaluate(agent, env, args)

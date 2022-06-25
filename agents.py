@@ -62,6 +62,7 @@ class AgentSAC(Agent):
         self.device = args.device
         dim_state = space_state.shape[0]
         dim_action = space_action.shape[0]
+        self.dim_action = dim_action
         num_h = 2
         dim_h = 256
         self.critic = models.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
@@ -88,6 +89,9 @@ class AgentSAC(Agent):
         self.weight_conservative = 5.0
         self.training = True
 
+    def _preprocess_data(iself, data):
+        return data
+
     def eval(self):
         self.policy.eval()
         self.critic.eval()
@@ -104,7 +108,7 @@ class AgentSAC(Agent):
             return action
 
     def step(self, data):
-        state, action, reward, state_next, done = data
+        state, action, reward, state_next, done = self._preprocess_data(data)
         state = state.to(self.device)
         action = action.to(self.device)
         reward = reward.to(self.device)
@@ -173,4 +177,45 @@ class AgentSAC(Agent):
         self.policy.train()
         self.critic.train()
         self.training = True
+
+
+class AgentSACAntagonist(AgentSAC):
+
+    def __init__(self, space_state, space_action, args):
+        super().__init__(space_state, space_action, args)
+
+    def _preprocess_data(self, data):
+        state, action, reward, state_next, done = data
+        return state, action, -reward, state_next, done
+
+
+class AgentConcat(Agent):
+    
+    def __init__(self, agents):
+        super().__init__()
+        self.agents = agents
+
+    def eval(self):
+        for agent in self.agents:
+            agent.eval()
+
+    def get_action(self, state):
+        actions = [agent.get_action(state) for agent in self.agents]
+        action = np.concatenate(actions, axis=-1)
+        return action
+
+    def step(self, data):
+        state, action, reward, state_next, done = data
+        dims_action = [agent.dim_action for agent in self.agents]
+        idxs_split = np.cumsum(dims_action)[:-1]
+        actions = np.split(action, idxs_split, axis=-1)
+        losses = []
+        for idx_agent in range(len(self.agents)):
+            loss = self.agents[idx_agent].step((state, actions[idx_agent], reward, state_next, done))
+            losses.append(loss)
+        return list(zip(*losses))
+            
+    def train(self):
+        for agent in self.agents:
+            agent.train()
 

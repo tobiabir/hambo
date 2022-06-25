@@ -6,32 +6,12 @@ import torch
 import agents
 import rollout
 
-def create_log_gaussian(mean, log_std, t):
-    quadratic = -((0.5 * (t - mean) / (log_std.exp())).pow(2))
-    l = mean.shape
-    log_z = log_std
-    z = l[-1] * math.log(2 * math.pi)
-    log_p = quadratic.sum(dim=-1) - log_z.sum(dim=-1) - 0.5 * z
-    return log_p
-
-def logsumexp(inputs, dim=None, keepdim=False):
-    if dim is None:
-        inputs = inputs.view(-1)
-        dim = 0
-    s, _ = torch.max(inputs, dim=dim, keepdim=True)
-    outputs = s + (inputs - s).exp().sum(dim=dim, keepdim=True).log()
-    if not keepdim:
-        outputs = outputs.squeeze(dim)
-    return outputs
 
 def soft_update(target, source, tau):
     with torch.no_grad():
         for target_param, param in zip(target.parameters(), source.parameters()):
             target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
-def hard_update(target, source):
-    for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.copy_(param.data)
 
 def set_seeds(seed):
     torch.backends.cudnn.deterministic = True
@@ -39,20 +19,6 @@ def set_seeds(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio, num_workers=1):
-    dataset = torch.utils.data.ConcatDataset((dataset1, dataset2))
-    num_samples = num_batches * size_batch
-    #sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=num_samples)
-    sampler_batch = SamplerBatchRatio(len(dataset1), len(dataset2), num_batches, size_batch, ratio)
-    dataloader = torch.utils.data.DataLoader(
-        dataset=dataset,
-        #batch_size=size_batch,
-        #sampler=sampler,
-        batch_sampler=sampler_batch,
-        num_workers=num_workers,
-    )
-    return dataloader
 
 
 def get_scores_calibration(y_pred_means, y_pred_stds, y_train):
@@ -63,68 +29,6 @@ def get_scores_calibration(y_pred_means, y_pred_stds, y_train):
     levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
     scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
     return scores
-
-
-class ScalerStandard():
-    
-    def __init__(self):
-        self.mean = 0.0
-        self.std = 1.0
-        self.active = True
-
-    def activate(self):
-        self.active = True
-
-    def deactivate(self):
-        self.active = False
-
-    def fit(self, data):
-        self.mean = torch.mean(data, dim=0)
-        self.std = torch.std(data, dim=0)
-
-    def transform(self, data):
-        if not self.active:
-            return data
-        return (data - self.mean) / self.std
-
-    def inverse_transform(self, data_mean, data_std):
-        if not self.active:
-            return data_mean, data_std
-        mean = self.mean + data_mean * self.std
-        std = data_std * self.std
-        return mean, std
-
-
-def preprocess(model, dataset, device="cpu"):
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
-    state, action, reward, state_next, _ = next(iter(dataloader))
-    x = torch.cat((state, action), dim=-1)[:, :model.dim_x].to(device)
-    y = torch.cat((reward, state_next - state), dim=-1).to(device)
-    model.scaler_x.fit(x)
-    model.scaler_y.fit(y)
-
-
-class SamplerBatchRatio():
-
-    def __init__(self, len1, len2, num_batches, size_batch, ratio):
-        self.len1 = len1
-        self.len2 = len2
-        self.num_batches = num_batches
-        if len2 == 0:
-            self.size_batch1 = size_batch
-        else:
-            self.size_batch1 = int(ratio * size_batch)
-        self.size_batch2 = size_batch - self.size_batch1
-
-    def __iter__(self):
-        for idx_batch in range(self.num_batches):
-            idxs1 = random.choices(range(self.len1), k=self.size_batch1)
-            idxs2 = random.choices(range(self.len1, self.len1 + self.len2), k=self.size_batch2)
-            idxs = idxs1 + idxs2
-            yield idxs
-
-    def __len__(self):
-        return self.num_batches
 
 
 def get_mean_std_of_mixture(means, stds, epistemic=False):

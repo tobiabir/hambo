@@ -29,6 +29,7 @@ class DatasetNumpy(torch.utils.data.Dataset):
         batch = np.stack(batch)
         return batch
 
+
 class DatasetSARS(torch.utils.data.Dataset):
     
     def __init__(self, capacity=sys.maxsize):
@@ -81,4 +82,81 @@ class DatasetSARS(torch.utils.data.Dataset):
         batch[2] = np.expand_dims(batch[2], axis=-1)
         batch[4] = np.expand_dims(batch[4], axis=-1)
         return batch 
+
+
+class ScalerStandard():
+    
+    def __init__(self):
+        self.mean = 0.0
+        self.std = 1.0
+        self.active = True
+
+    def activate(self):
+        self.active = True
+
+    def deactivate(self):
+        self.active = False
+
+    def fit(self, data):
+        self.mean = torch.mean(data, dim=0)
+        self.std = torch.std(data, dim=0)
+
+    def transform(self, data):
+        if not self.active:
+            return data
+        return (data - self.mean) / self.std
+
+    def inverse_transform(self, data_mean, data_std):
+        if not self.active:
+            return data_mean, data_std
+        mean = self.mean + data_mean * self.std
+        std = data_std * self.std
+        return mean, std
+
+
+class SamplerBatchRatio():
+
+    def __init__(self, len1, len2, num_batches, size_batch, ratio):
+        self.len1 = len1
+        self.len2 = len2
+        self.num_batches = num_batches
+        if len2 == 0:
+            self.size_batch1 = size_batch
+        else:
+            self.size_batch1 = int(ratio * size_batch)
+        self.size_batch2 = size_batch - self.size_batch1
+
+    def __iter__(self):
+        for idx_batch in range(self.num_batches):
+            idxs1 = random.choices(range(self.len1), k=self.size_batch1)
+            idxs2 = random.choices(range(self.len1, self.len1 + self.len2), k=self.size_batch2)
+            idxs = idxs1 + idxs2
+            yield idxs
+
+    def __len__(self):
+        return self.num_batches
+
+
+def preprocess(model, dataset, device="cpu"):
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
+    state, action, reward, state_next, _ = next(iter(dataloader))
+    x = torch.cat((state, action), dim=-1)[:, :model.dim_x].to(device)
+    y = torch.cat((reward, state_next - state), dim=-1).to(device)
+    model.scaler_x.fit(x)
+    model.scaler_y.fit(y)
+
+
+def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio, num_workers=1):
+    dataset = torch.utils.data.ConcatDataset((dataset1, dataset2))
+    num_samples = num_batches * size_batch
+    #sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=num_samples)
+    sampler_batch = SamplerBatchRatio(len(dataset1), len(dataset2), num_batches, size_batch, ratio)
+    dataloader = torch.utils.data.DataLoader(
+        dataset=dataset,
+        #batch_size=size_batch,
+        #sampler=sampler,
+        batch_sampler=sampler_batch,
+        num_workers=num_workers,
+    )
+    return dataloader
 

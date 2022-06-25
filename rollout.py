@@ -1,5 +1,6 @@
 import data
 
+
 def rollout_episode(env, agent):
     dim_action = env.action_space.shape[0]
 
@@ -13,7 +14,7 @@ def rollout_episode(env, agent):
     while not done:
         action = agent.get_action(state)[:dim_action]
         state_next, reward, done, info = env.step(action)
-        
+
         mask = float(done and not info["TimeLimit.truncated"])
         dataset.push(state, action, reward, state_next, mask)
 
@@ -23,6 +24,7 @@ def rollout_episode(env, agent):
         idx_step += 1
 
     return dataset, state_initial, reward_episode
+
 
 def rollout_steps(env, agent, dataset, dataset_states_initial, num_steps):
     dim_action = env.action_space.shape[0]
@@ -37,4 +39,3 @@ def rollout_steps(env, agent, dataset, dataset_states_initial, num_steps):
             state = env.reset()
         if dataset_states_initial is not None:
             dataset_states_initial.append(state)
-
