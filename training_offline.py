@@ -38,6 +38,8 @@ if __name__ == "__main__":
                         help="number of elite networks in model (default: 5)")
     parser.add_argument("--weight_regularizer_model", type=float, default=0.0,
                         help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
+    parser.add_argument("--weight_loss_adversarial_model", type=float, default=0.0,
+                        help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
     parser.add_argument("--lr_model", type=float, default=0.001,
                         help="learning rate (default: 0.001)")
     parser.add_argument("--use_gauss_approx", default=False, action="store_true",
@@ -74,6 +76,8 @@ if __name__ == "__main__":
                         help="number of steps to rollout model in a round of rollout (default: 128)")
     parser.add_argument("--max_length_rollout_model", type=int, default=1,
                         help="number of steps to rollout model from initial state (a.k.a. episode length) (default: 1)")
+    parser.add_argument("--interval_train_model_adversarial", type=int, default=1,
+                        help="interval of steps after which a round of adversarial training is done (default: 1)")
     parser.add_argument("--num_steps_train_agent", type=int, default=128,
                         help="number of steps to train agent per iteration (default: 128)")
     parser.add_argument("--interval_eval_agent", type=int, default=128,
@@ -119,6 +123,7 @@ if __name__ == "__main__":
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
 
     use_model = args.ratio_env_model < 1.0
+    train_adversarial = args.weight_loss_adversarial_model > 0.0
     if use_model:
         if args.path_checkpoint_model is None or not os.path.isfile(args.path_checkpoint_model):
             if args.model == "GP":
@@ -147,7 +152,7 @@ if __name__ == "__main__":
             if not args.path_checkpoint_model is None:
                 torch.save(model, args.path_checkpoint_model)
         else:
-            model = torch.load(args.path_checkpoint_model)
+            model = torch.load(args.path_checkpoint_model, map_location=args.device)
 
         model.eval()
         if args.hallucinate:
@@ -164,12 +169,17 @@ if __name__ == "__main__":
         agent = agents.AgentConcat([agent, agent_antagonist])
 
     for idx_epoch in range(args.num_epochs):
+        agent.train()
         if use_model and (idx_epoch + 1) % args.interval_rollout_model == 0:
+            model.eval()
             env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
         dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
         for batch in dataloader:
             loss_actor, loss_critic, loss_alpha = agent.step(batch)
         print(f"idx_epoch: {idx_epoch}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}")
+        if train_adversarial and (idx_epoch + 1) % args.interval_train_model_adversarial == 0:
+            agent.eval()
+            losses_model, scores_calibration = training.train_ensemble_adversarial(model, dataset_env, agent, env_model.model_termination, args)
         if (idx_epoch + 1) % args.interval_eval_agent == 0:
             return_eval = evaluation.evaluate_agent(agent, env, args.num_episodes_eval)
             print(f"idx_epoch: {idx_epoch}, return_eval: {return_eval}")

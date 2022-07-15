@@ -20,7 +20,51 @@ def train_gp(model, dataset, args):
     return model
 
 
+def get_fn_loss_map(weight_prior):
+    def fn_loss(y_pred_mean, y_pred_std, y_train, state, action):
+        loss_mle = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
+        distr_prior = torch.distributions.Normal(0, 1)
+        loss_prior = torch.zeros(loss_mle.shape, device=loss_mle.device)
+        for name, parameter in model.named_parameters():
+            if "weight" in name:
+                loss_prior -= weight_prior * distr_prior.log_prob(parameter).sum(dim=(1,2))
+        loss = loss_prior + loss_mle
+        return loss
+    return fn_loss
+
+
 def train_ensemble_map(model, dataset, args):
+    fn_loss = get_fn_loss_map(args.weight_regularizer_model)
+    return train_ensemble(model, dataset, fn_loss, args)
+
+
+def train_ensemble_adversarial(model, dataset, agent, model_termination, args):
+    fn_loss_map = get_fn_loss_map(args.weight_regularizer_model)
+    def fn_loss(y_pred_mean, y_pred_std, y_train, state, action):
+        loss_map = fn_loss_map(y_pred_mean, y_pred_std, y_train, state, action)
+        distr_y_pred = torch.distributions.Normal(y_pred_mean, y_pred_std)
+        with torch.no_grad():
+            y_pred = distr_y.rsample()
+            reward = y_pred[:, :, :1]
+            state_diff = y_pred[:, :, 1:]
+            state_next = state + state_diff
+            # Note: no clamp because gradients would just become zero
+            terminal = torch.tensor(model_termination(state_next.cpu().numpy()), dtype=torch.float32, device=state_next.device)
+            action_next, _, _ = agent.policy(state, state_next)
+            q = torch.min(*agent.critic(state, action))
+            q_next = torch.min(*agent.critic(state_next, action_next))
+            q_pred = reward + args.gamma * q_next * terminal
+            advantage = q - q_pred
+            advantage_mean = torch.mean(advantage, dim=1)
+            advantage_std = torch.std(advantage, dim=1)
+            advantage = (advantage - advantage_meaon) / advantage_std
+        y_pred_prob_log = distr_y.log_prob(y_pred)
+        loss_adverarial = advantage * y_pred_prob_log
+        return loss_map + args.weight_loss_adversarial_model * loss_adversarial
+    return train_ensemble(model, dataset, fn_loss, args)
+    
+
+def train_ensemble(model, dataset, fn_loss, args):
     model.train()
     len_train = int(0.9 * len(dataset))
     len_eval = len(dataset) - len_train
@@ -34,16 +78,6 @@ def train_ensemble_map(model, dataset, args):
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model)
 
-    def fn_loss(y_pred_mean, y_pred_std, y_train, scale_prior_weight=0.0):
-        loss_mle = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
-        distr_prior = torch.distributions.Normal(0, 1)
-        loss_prior = torch.zeros(loss_mle.shape, device=loss_mle.device)
-        for name, parameter in model.named_parameters():
-            if "weight" in name:
-                loss_prior -= scale_prior_weight * distr_prior.log_prob(parameter).sum(dim=(1,2))
-        loss = loss_prior + loss_mle
-        return loss
-
     losses_eval_best = evaluation.evaluate_model(model, dataset_eval, [fn_loss], args.device)[0]
     state_dicts_best = [model.layers.state_dict()] * model.size_ensemble
     idxs_epoch_best = - np.ones(model.size_ensemble)
@@ -56,7 +90,7 @@ def train_ensemble_map(model, dataset, args):
             y_pred_means, y_pred_stds = model(x)
             y = torch.cat((reward, state_next - state), dim=-1).to(args.device)
             y = model.scaler_y.transform(y)
-            loss = fn_loss(y_pred_means, y_pred_stds, y, args.weight_regularizer_model).sum()
+            loss = fn_loss(y_pred_means, y_pred_stds, y, state, action).sum()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

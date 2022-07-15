@@ -87,6 +87,7 @@ class AgentSAC(Agent):
             self.alpha = args.alpha
         self.conservative = args.conservative
         self.weight_conservative = 5.0
+        self.size_batch_env = int(args.ratio_env_model)
         self.training = True
 
     def _preprocess_data(iself, data):
@@ -125,6 +126,9 @@ class AgentSAC(Agent):
         loss_q2 = torch.nn.functional.mse_loss(q2, q_target)
 
         if self.conservative:
+            # Note: COMBO would actually only use the model states here.
+            # However I argue the action distribution shift alone already demands conservatism.
+            # Therefore we use all the states.
             num_samples = 10
             action_random = torch.distributions.Uniform(-1, 1).sample((q1.shape[0] * num_samples, action.shape[-1])).to(self.device)
             prob_log_random = np.log(0.5 ** action_random.shape[-1])
@@ -139,10 +143,12 @@ class AgentSAC(Agent):
             cat_q1 = torch.cat([q1_random - prob_log_random, q1_next - prob_log_next.detach(), q1_curr - prob_log.detach()], dim=1)
             cat_q2 = torch.cat([q2_random - prob_log_random, q2_next - prob_log_next.detach(), q2_curr - prob_log.detach()], dim=1)
                 
-            loss_q1_conservative = torch.logsumexp(cat_q1, dim=1,).mean()
-            loss_q2_conservative = torch.logsumexp(cat_q2, dim=1,).mean()
-            loss_q1_conservative = loss_q1_conservative - q1.mean()
-            loss_q2_conservative = loss_q2_conservative - q2.mean()
+            # Note: As model data has action distribution shift even for rollout length 1
+            # it always makes sense to exclude model data here.
+            q1_env, q2_env = self.critic(state[:self.size_batch_env], action[:self.size_batch_env])
+
+            loss_q1_conservative = torch.logsumexp(cat_q1, dim=1,).mean() - q1_env.mean()
+            loss_q2_conservative = torch.logsumexp(cat_q2, dim=1,).mean() - q2_env.mean()
             
             loss_q1 += self.weight_conservative * loss_q1_conservative
             loss_q2 += self.weight_conservative * loss_q2_conservative
