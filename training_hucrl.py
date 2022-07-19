@@ -37,8 +37,8 @@ if __name__ == "__main__":
                         help="number of networks in model (default: 7)")
     parser.add_argument("--num_elites_model", type=int, default=5,
                         help="number of elite networks in model (default: 5)")
-    parser.add_argument("--weight_regularizer_model", type=float, default=0.0,
-                        help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
+    parser.add_argument("--weight_prior_model", type=float, default=0.0,
+                        help="weight on the prior in the map estimate for model training (default: 0.0)")
     parser.add_argument("--use_gauss_approx", default=False, action="store_true",
                         help="set to use gauss approximation instead of true mixture to sample from transition model (default: False)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
@@ -81,7 +81,7 @@ if __name__ == "__main__":
                         help="number of steps to train agent per iteration (default: 128)")
     parser.add_argument("--interval_eval_agent", type=int, default=128,
                         help="interval of steps after which a round of evaluation is done (default: 128)")
-    parser.add_argument("--num_episodes_eval", type=int, default=1,
+    parser.add_argument("--num_episodes_eval_agent", type=int, default=1,
                         help="number of episodes to evaluate (default: 1)")
     parser.add_argument("--device", default=None,
                         help="device (default: gpu if available else cpu)")
@@ -100,11 +100,12 @@ if __name__ == "__main__":
             args.device = "cuda"
         else:
             args.device = "cpu"
+    print(f"algorithm: {args.algorithm}")
     print(f"device: {args.device}")
     args.weight_penalty_reward = 0.0
     args.conservative = False
 
-    wandb.init(mode="disabled", project="Master Thesis", entity="tobiabir", config=args)
+    wandb.init(mode="disabled", project="HMBSAC", entity="tobiabir", config=args)
 
     # setting rng seeds
     utils.set_seeds(args.seed)
@@ -133,12 +134,12 @@ if __name__ == "__main__":
         env = envs.WrapperEnvHalfCheetah(env)
 
     dim_action = env.action_space.shape[0]
-    
+
     args.idx_step = 0
     args.idx_step_agent_global = 0
 
     if args.model == "GP":
-        Model = None # TODO
+        Model = None  # TODO
     elif args.model == "EnsembleDeterministic":
         Model = models.NetDense
     elif args.model == "EnsembleProbabilisticHomoscedastic":
@@ -158,14 +159,17 @@ if __name__ == "__main__":
         EnvModel = envs.EnvModelHallucinated
     else:
         EnvModel = envs.EnvModel
-    env_model = EnvModel(env.observation_space, env.action_space, None, model, env.done, args)
-    env_model = gym.wrappers.TimeLimit(env_model, args.max_length_rollout_model)
+    env_model = EnvModel(env.observation_space,
+                         env.action_space, None, model, env.done, args)
+    env_model = gym.wrappers.TimeLimit(
+        env_model, args.max_length_rollout_model)
     env_model = envs.WrapperEnv(env_model)
     env_eval = copy.deepcopy(env)
     has_trained_model = False
 
     agent_random = agents.AgentRandom(env_model.action_space)
-    agent = agents.AgentSAC(env_model.observation_space, env_model.action_space, args)
+    agent = agents.AgentSAC(env_model.observation_space,
+                            env_model.action_space, args)
 
     dataset_env = data.DatasetSARS(capacity=args.replay_size)
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
@@ -175,7 +179,8 @@ if __name__ == "__main__":
     dataset_states_initial.append(state)
 
     print("startup...")
-    rollout.rollout_steps(env, agent_random, dataset_env, dataset_states_initial, args.num_steps_startup)
+    rollout.rollout_steps(env, agent_random, dataset_env,
+                          dataset_states_initial, args.num_steps_startup)
     args.idx_step += args.num_steps_startup
 
     state = env.state
@@ -184,14 +189,14 @@ if __name__ == "__main__":
         agent.train()
         action = agent.get_action(state)
         state_next, reward, done, info = env.step(action[:dim_action])
-        mask = float(done and not info["TimeLimit.truncated"]) 
+        mask = float(done and not info["TimeLimit.truncated"])
         dataset_env.push(state, action, reward, state_next, mask)
         state = state_next
         if done:
             state = env.reset()
         dataset_states_initial.append(state)
         if (idx_step + 1) % args.interval_train_model == 0:
-            losses_model, scores_calibration = training.train_ensemble_map(model, dataset_env, args)
+            losses_model, scores_calibration = training.train_ensemble_map(model, dataset_env, args.weight_prior_model, args.lr_model, args.size_batch, args.device)
             loss_model = losses_model.mean()
             score_calibration = scores_calibration.mean()
             wandb.log({"loss_model": loss_model, "score_calibration": score_calibration, "idx_step": idx_step})
@@ -199,10 +204,13 @@ if __name__ == "__main__":
             has_trained_model = True
         if has_trained_model and (idx_step + 1) % args.interval_rollout_model == 0:
             model.eval()
-            env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
-            env_model = gym.wrappers.TimeLimit(env_model, args.max_length_rollout_model)
+            env_model = EnvModel(env.observation_space, env.action_space,
+                                 dataset_states_initial, model, env.done, args)
+            env_model = gym.wrappers.TimeLimit(
+                env_model, args.max_length_rollout_model)
             env_model = envs.WrapperEnv(env_model)
-            env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
+            env_model.rollout(
+                agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
         if (idx_step + 1) % args.interval_train_agent == 0:
             dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
             for batch in dataloader:
@@ -210,7 +218,7 @@ if __name__ == "__main__":
             wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}, alpha: {agent.alpha}")
         if (idx_step + 1) % args.interval_eval_agent == 0:
-            return_eval = evaluation.evaluate_agent(agent, env_eval, args.num_episodes_eval)
+            return_eval = evaluation.evaluate_agent(agent, env_eval, args.num_episodes_eval_agent)
             wandb.log({"return_eval": return_eval, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, return_eval: {return_eval}")
         args.idx_step = idx_step

@@ -8,6 +8,14 @@ import utils
 
 
 class Agent(ABC):
+    """Base class for agents.
+
+    Methods:
+        eval:        set agent in eval mode
+        get_action:  given a state get an action
+        step:        do a training step
+        train:       set agent in train mode
+    """
 
     def __init__(self):
         pass
@@ -25,7 +33,13 @@ class Agent(ABC):
     def train(self):
         pass
 
+
 class AgentRandom(Agent):
+    """Agent taking random actions.
+
+    Attributes:
+       space_action:    gym action space
+    """
 
     def __init__(self, space_action):
         self.space_action = space_action
@@ -33,15 +47,10 @@ class AgentRandom(Agent):
     def get_action(self, state):
         return self.space_action.sample()
 
-class AgentZero(Agent):
-
-    def __init__(self, space_action):
-        self.dim_action = space_action.shape[0]
-
-    def get_action(self, state):
-        return np.zeros(self.dim_action, dtype=np.float32)
 
 class AgentPointOptimal(Agent):
+    """Agent taking the optimal actions for the Point environment.
+    """
 
     def __init__(self):
         super().__init__()
@@ -53,7 +62,10 @@ class AgentPointOptimal(Agent):
         action = - np.sign(state) * action_abs
         return action
 
+
 class AgentSAC(Agent):
+    """General agent learning via [SAC](https://arxiv.org/abs/1801.01290).
+    """
 
     def __init__(self, space_state, space_action, args):
         super().__init__()
@@ -87,7 +99,7 @@ class AgentSAC(Agent):
             self.alpha = args.alpha
         self.conservative = args.conservative
         self.weight_conservative = 5.0
-        self.size_batch_env = int(args.ratio_env_model)
+        self.size_batch_env = int(args.ratio_env_model * args.size_batch)
         self.training = True
 
     def _preprocess_data(iself, data):
@@ -130,18 +142,18 @@ class AgentSAC(Agent):
             # However I argue the action distribution shift alone already demands conservatism.
             # Therefore we use all the states.
             num_samples = 10
-            action_random = torch.distributions.Uniform(-1, 1).sample((q1.shape[0] * num_samples, action.shape[-1])).to(self.device)
+            state_tmp = state.unsqueeze(dim=1).repeat(1, num_samples, 1).reshape(-1, state.shape[1])
+            action_random = torch.distributions.Uniform(-1, 1).sample((state_tmp.shape[0], action.shape[1])).to(self.device)
             prob_log_random = np.log(0.5 ** action_random.shape[-1])
-            state_tmp = state.unsqueeze(dim=1).repeat(1, num_samples, 1).reshape(-1, state.shape[-1])
+            action_tmp, _, prob_log_tmp = self.policy(state_tmp)
             state_next_tmp = state_next.unsqueeze(dim=1).repeat(1, num_samples, 1).reshape(-1, state.shape[-1])
-            action, _, prob_log = self.policy(state_tmp)
-            action_next, _, prob_log_next = self.policy(state_next_tmp)
+            action_next_tmp, _, prob_log_next_tmp = self.policy(state_next_tmp)
             q1_random, q2_random = self.critic(state_tmp, action_random)
-            q1_curr, q2_curr = self.critic(state_tmp, action)
-            q1_next, q2_next = self.critic(state_tmp, action_next)
+            q1_curr, q2_curr = self.critic(state_tmp, action_tmp)
+            q1_next, q2_next = self.critic(state_tmp, action_next_tmp)
 
-            cat_q1 = torch.cat([q1_random - prob_log_random, q1_next - prob_log_next.detach(), q1_curr - prob_log.detach()], dim=1)
-            cat_q2 = torch.cat([q2_random - prob_log_random, q2_next - prob_log_next.detach(), q2_curr - prob_log.detach()], dim=1)
+            cat_q1 = torch.cat([q1_random - prob_log_random, q1_next - prob_log_next_tmp.detach(), q1_curr - prob_log_tmp.detach()], dim=1)
+            cat_q2 = torch.cat([q2_random - prob_log_random, q2_next - prob_log_next_tmp.detach(), q2_curr - prob_log_tmp.detach()], dim=1)
                 
             # Note: As model data has action distribution shift even for rollout length 1
             # it always makes sense to exclude model data here.
@@ -186,6 +198,8 @@ class AgentSAC(Agent):
 
 
 class AgentSACAntagonist(AgentSAC):
+    """General agent learning to get minimal reward via [SAC](https://arxiv.org/abs/1801.01290).
+    """
 
     def __init__(self, space_state, space_action, args):
         super().__init__(space_state, space_action, args)
@@ -196,6 +210,8 @@ class AgentSACAntagonist(AgentSAC):
 
 
 class AgentConcat(Agent):
+    """Combines agents into one agent giving one action that is the concatenation of the agents actions.
+    """
     
     def __init__(self, agents):
         super().__init__()

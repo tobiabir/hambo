@@ -124,6 +124,17 @@ class WrapperEnvHalfCheetah(WrapperEnv):
         return False
 
 
+class WrapperEnvWalker(WrapperEnv):
+    
+    def done(self, state):
+        z = state[..., :1]
+        angle = state[..., 1:2]
+        is_healthy_z = np.logical_and(0.8 < z, z < 2.0)
+        is_healthy_angle = np.logical_and(-1.0 < angle, angle < 1.0)
+        is_healthy = np.logical_and(is_healthy_z, is_healthy_angle)
+        return is_healthy
+
+
 class EnvModel(gym.core.Env):
 
     def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args):
