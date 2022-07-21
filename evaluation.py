@@ -4,8 +4,6 @@ import numpy as np
 import random
 import torch
 
-import agents
-import envs
 import rollout
 
 

@@ -2,46 +2,37 @@ import argparse
 import copy
 import d4rl
 import gym
-import os
 import torch
-import tqdm
 import wandb
 
 import agents
 import data
 import envs
 import evaluation
-import models
 import training
 import utils
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Offline RL")
+
+    # dataset arguments
     parser.add_argument("--name_env", type=str, choices=["HalfCheetah", "Hopper", "Walker"], required=True,
                         help="name of the environment")
     parser.add_argument("--name_task", type=str, choices=["random", "medium", "expert"],  required=True,
                         help="name of the task")
+
+    # model arguments
     parser.add_argument("--path_checkpoint_model", type=str, default=None,
                         help="path to model checkpoint (default: None (no checkpointing))")
-    parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilisticHomoscedastic", "EnsembleProbabilisticHeteroscedastic"], default="EnsembleProbabilisticHeteroscedastic",
-                        help="what type of model to use to learn dyamics of the environment (default: EnsembleProbabilisticHeteroscedastic)")
-    parser.add_argument("--use_scalers", default=False, action="store_true",
-                        help="set to use scalers for transition model (default: False)")
-    parser.add_argument("--num_h_model", type=int, default=2,
-                        help="number of hidden layers in model (only for ensembles) (default: 2)")
-    parser.add_argument("--dim_h_model", type=int, default=256,
-                        help="dimension of hidden layers in model (only for ensembles) (default: 256)")
-    parser.add_argument("--size_ensemble_model", type=int, default=7,
-                        help="number of networks in model (default: 7)")
-    parser.add_argument("--num_elites_model", type=int, default=5,
-                        help="number of elite networks in model (default: 5)")
     parser.add_argument("--weight_prior_model", type=float, default=0.0,
                         help="weight on the prior in the map estimate for model training (default: 0.0)")
     parser.add_argument("--weight_loss_adversarial_model", type=float, default=0.0,
                         help="regularizer weight lambda of the prior in the map estimate for model training (default: 0.0)")
     parser.add_argument("--lr_model", type=float, default=0.001,
                         help="learning rate (default: 0.001)")
+
+    # model environment arguments
     parser.add_argument("--use_gauss_approx", default=False, action="store_true",
                         help="set to use gauss approximation instead of true mixture to sample from transition model (default: False)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
@@ -52,10 +43,10 @@ if __name__ == "__main__":
                         help="set to add hallucinated control (default: False)")
     parser.add_argument("--beta", type=float, default=1.0,
                         help="parameter for the amount of hallucinated control (only has effect if hallucinate is set) (default: 1.0)")
+
+    # SAC arguments
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
-    parser.add_argument("--ratio_env_model", type=float, default=0.05,
-                        help="ratio of env data to model data in agent batches (default: 0.05)")
     parser.add_argument("--tau", type=float, default=0.005,
                         help="target smoothing coefficient (default: 0.005)")
     parser.add_argument("--alpha", type=float, default=0.05,
@@ -66,8 +57,12 @@ if __name__ == "__main__":
                         help="learning rate (default: 0.0003)")
     parser.add_argument("--conservative", default=False, action="store_true",
                         help="set to add conservative Q learning (default: False)")
+
+    # procedure arguments
     parser.add_argument("--size_batch", type=int, default=256,
                         help="batch size (default: 256)")
+    parser.add_argument("--ratio_env_model", type=float, default=0.05,
+                        help="ratio of env data to model data in agent batches (default: 0.05)")
     parser.add_argument("--num_rounds", type=int, default=128,
                         help="number of rounds to train (default: 128)")
     parser.add_argument("--interval_rollout_model", type=int, default=1,
@@ -90,6 +85,7 @@ if __name__ == "__main__":
                         help="device (default: cuda if available else cpu)")
     parser.add_argument("--replay_size", type=int, default=1000000,
                         help="capacity of replay buffer (default: 1000000)")
+
     args = parser.parse_args()
     use_model = args.ratio_env_model < 1.0
     train_adversarial = args.weight_loss_adversarial_model > 0.0
@@ -183,35 +179,9 @@ if __name__ == "__main__":
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
 
     if use_model:
-        if args.path_checkpoint_model is None or not os.path.isfile(args.path_checkpoint_model):
-            if args.model == "GP":
-                Model = None  # TODO
-            elif args.model == "EnsembleDeterministic":
-                Model = models.NetDense
-            elif args.model == "EnsembleProbabilisticHomoscedastic":
-                Model = models.NetGaussHomo
-            elif args.model == "EnsembleProbabilisticHeteroscedastic":
-                Model = models.NetGaussHetero
-            model = Model(
-                dim_x=env.observation_space.shape[0] +
-                env.action_space.shape[0],
-                dim_y=1 + env.observation_space.shape[0],
-                num_h=args.num_h_model,
-                dim_h=args.dim_h_model,
-                size_ensemble=args.size_ensemble_model,
-                num_elites=args.num_elites_model,
-                use_scalers=args.use_scalers,
-            ).to(args.device)
-
-            losses_model, scores_calibration = training.train_ensemble_map(model, dataset_env, args.weight_prior_model, args.lr_model, args.size_batch, args.device)
-            loss_model = losses_model.mean()
-            score_calibration = scores_calibration.mean()
-            print(f"loss_model: {loss_model}, score_calibration: {score_calibration}")
-
-            if not args.path_checkpoint_model is None:
-                torch.save(model, args.path_checkpoint_model)
-        else:
-            model = torch.load(args.path_checkpoint_model, map_location=args.device)
+        #checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
+        #model = checkpoint_model["model"]
+        model = torch.load(args.path_checkpoint_model, map_location=args.device)
 
         model.eval()
         if args.hallucinate:

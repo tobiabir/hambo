@@ -241,3 +241,37 @@ class AgentConcat(Agent):
         for agent in self.agents:
             agent.train()
 
+
+class AgentDOPE(Agent):
+    """DOPE agent.
+    """
+
+    def __init__(self, weights):
+        self.fc0_w = weights["fc0/weight"]
+        self.fc0_b = weights["fc0/bias"]
+        self.fc1_w = weights["fc1/weight"]
+        self.fc1_b = weights["fc1/bias"]
+        self.fclast_w = weights["last_fc/weight"]
+        self.fclast_b = weights["last_fc/bias"]
+        self.fclast_w_std_log = weights["last_fc_log_std/weight"]
+        self.fclast_b_std_log = weights["last_fc_log_std/bias"]
+        relu = lambda x: np.maximum(x, 0)
+        self.nonlinearity = np.tanh if weights["nonlinearity"] == "tanh" else relu
+        identity = lambda x: x
+        self.output_transformation = np.tanh if weights["output_distribution"] == "tanh_gaussian" else identity
+        self.dim_action = self.fclast_w.shape[0]
+
+    def get_action(self, state):
+        x = state @ self.fc0_w.T + self.fc0_b
+        x = self.nonlinearity(x)
+        x = x @ self.fc1_w.T + self.fc1_b
+        x = self.nonlinearity(x)
+        mean = x @ self.fclast_w.T + self.fclast_b
+        std_log = x @ self.fclast_w_std_log.T + self.fclast_b_std_log
+        std = np.exp(std_log)
+        action = self.output_transformation(np.random.normal(mean, std))
+        return action
+
+    def step(self, data):
+        return (None,) * 3
+    

@@ -5,3 +5,4 @@ __pycache__
 Logs
 lsf*
 wandb
+Checkpoints
