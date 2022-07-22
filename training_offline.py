@@ -179,9 +179,8 @@ if __name__ == "__main__":
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
 
     if use_model:
-        #checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
-        #model = checkpoint_model["model"]
-        model = torch.load(args.path_checkpoint_model, map_location=args.device)
+        checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
+        model = checkpoint_model["model"]
 
         model.eval()
         if args.hallucinate:
