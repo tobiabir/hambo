@@ -52,11 +52,12 @@ class AgentPointOptimal(Agent):
     """Agent taking the optimal actions for the Point environment.
     """
 
-    def __init__(self):
+    def __init__(self, dim_state):
         super().__init__()
+        self.dim_state = dim_state
 
     def get_action(self, state):
-        action_max_abs = np.ones(2) * 0.1
+        action_max_abs = np.ones(self.dim_state) * 0.1
         state_abs = np.abs(state)
         action_abs = np.min((state_abs, action_max_abs), axis=-1)
         action = - np.sign(state) * action_abs
