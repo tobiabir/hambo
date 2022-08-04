@@ -205,16 +205,18 @@ if __name__ == "__main__":
         for batch in dataloader:
             loss_actor, loss_critic, loss_alpha = agent.step(batch)
         if use_model and args.hallucinate:
-            wandb.log({"loss_actor": loss_actor[0], "loss_critic": loss_critic[0], "loss_alpha": loss_alpha[0], "alpha": agent.agents[0].alpha, "loss_actor_antagonist": loss_actor[1], "loss_critic_antagonist": loss_critic[1], "loss_alpha_antagonist": loss_alpha[1], "alpha_antagonist": agent.agents[1].alpha})
+            wandb.log({"loss_actor": loss_actor[0], "loss_critic": loss_critic[0], "loss_alpha": loss_alpha[0], "alpha": agent.agents[0].alpha, "loss_actor_antagonist": loss_actor[1], "loss_critic_antagonist": loss_critic[1], "loss_alpha_antagonist": loss_alpha[1], "alpha_antagonist": agent.agents[1].alpha, "idx_round": idx_round})
         else:
-            wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, })
+            wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_round": idx_round})
         print(f"idx_round: {idx_round}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}")
         if train_adversarial and (idx_round + 1) % args.interval_train_model_adversarial == 0:
             model.train()
             losses_model, scores_calibration = training.train_ensemble_adversarial(model, dataset_env, agent, env_model.model_termination, args.weight_prior_model, args.gamma, args.weight_loss_adversarial_model, args.lr_model, args.size_batch, args.device)
-            wandb.log({"loss_model": loss_model, "score_calibration": score_calibration, "idx_step": idx_step})
+            wandb.log({"loss_model": loss_model, "score_calibration": score_calibration, "idx_round": idx_round})
             print(f"idx_round: {idx_round}, loss_model: {loss_model}, score_calibration: {score_calibration}")
         if (idx_round + 1) % args.interval_eval_agent == 0:
             return_eval = evaluation.evaluate_agent(agent, env, args.num_episodes_eval_agent)
-            print(f"idx_round: {idx_round}, return_eval: {return_eval}")
+            return_eval_normalized = env.get_normalized_score(return_eval)
+            wandb.log({"return_eval": return_eval, "return_eval_normalized": return_eval_normalized, 
+            print(f"idx_round: {idx_round}, return_eval: {return_eval}, return_eval_normalized: {return_eval_normalized")
 
