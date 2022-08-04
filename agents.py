@@ -28,7 +28,7 @@ class Agent(ABC):
         pass
 
     def step(self, data):
-        pass
+        return (None,) * 3
 
     def train(self):
         pass
@@ -43,26 +43,96 @@ class AgentRandom(Agent):
 
     def __init__(self, space_action):
         self.space_action = space_action
+        self.dim_action = space_action.shape[0]
 
     def get_action(self, state):
+        if len(state.shape) == 2:
+            actions = [self.space_action.sample() for _ in range(state.shape[0])]
+            action = np.stack(actions, axis=0)
+            return action
         return self.space_action.sample()
+
+
+class AgentPolynomial(Agent):
+
+    def __init__(self, space_action, coef):
+        super().__init__()
+        bound_action_low = space_action.low[0]
+        bound_action_high = space_action.high[0]
+        self.bound_action_scale = (bound_action_high - bound_action_low) / 2
+        self.bound_action_bias = (bound_action_high + bound_action_low) / 2
+        self.p = np.polynomial.Polynomial(coef)
+
+    def get_action(self, state):
+        action = self.p(state)
+        action = self.bound_action_scale * np.tanh(action) + self.bound_action_bias
+        return action
+
+
+class AgentPointRandom(Agent):
+    """Agent taking random actions for the Point environment.
+    """
+    
+    def __init__(self, alpha, beta):
+        super().__init__()
+        self.distr = torch.distributions.Beta(alpha, beta)
+        self.bound_action_low = -0.1
+        self.bound_action_high = 0.1
+
+    def get_action(self, state):
+        sample = self.distr.sample(state.shape).numpy()
+        action = self.bound_action_low + (self.bound_action_high - self.bound_action_low) * sample
+        sign = np.sign(state)
+        sign[sign == 0] = 1
+        action = sign * action
+        return action
 
 
 class AgentPointOptimal(Agent):
     """Agent taking the optimal actions for the Point environment.
     """
 
-    def __init__(self, dim_state):
+    def __init__(self):
         super().__init__()
-        self.dim_state = dim_state
 
     def get_action(self, state):
-        action_max_abs = np.ones(self.dim_state) * 0.1
+        action_max_abs = np.ones(state.shape) * 0.1
         state_abs = np.abs(state)
-        action_abs = np.min((state_abs, action_max_abs), axis=-1)
+        action_abs = np.minimum(state_abs, action_max_abs)
         action = - np.sign(state) * action_abs
         return action
 
+
+class AgentPointEscapeOptimal(Agent):
+    """Agent taking the optimal actions for the PointEscape environment.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def get_action(self, state):
+        return np.ones(state.shape) * 0.1
+
+
+class AgentPointOptimalAntagonist(Agent):
+    """Agent taking the optimal adversarial actions for the Point environment.
+    """
+    
+    def get_action(self, state):
+        action_abs = np.ones(state.shape)
+        action = np.sign(state) * action_abs
+        return action
+
+
+class AgentPointEscapeOptimalAntagonist(Agent):
+    """Agent taking the optimal adversarial actions for the PointEscape environment.
+    """
+    
+    def get_action(self, state):
+        action_abs = np.ones(state.shape)
+        action = - np.sign(state) * action_abs
+        return action
+        
 
 class AgentSAC(Agent):
     """General agent learning via [SAC](https://arxiv.org/abs/1801.01290).
@@ -273,6 +343,3 @@ class AgentDOPE(Agent):
         action = self.output_transformation(np.random.normal(mean, std))
         return action
 
-    def step(self, data):
-        return (None,) * 3
-    

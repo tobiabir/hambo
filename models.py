@@ -7,6 +7,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.models import ExactGP 
 
 import data
+import utils
 
 STD_MIN = math.exp(-20)
 STD_MAX = math.exp(2)
@@ -18,8 +19,8 @@ class GPExact(gpytorch.models.ExactGP):
 
     def __init__(self, x_train, y_train, likelihood):
         super().__init__(x_train, y_train, likelihood)
-        self.mean_module = gpytorch.means.LinearMean(4)
-        self.covar_module = gpytorch.kernels.RBFKernel()
+        self.mean_module = gpytorch.means.LinearMean(x_train.shape[1])
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
 
     def forward(self, x):
         mean = self.mean_module(x)
@@ -30,47 +31,63 @@ class ModelGP(torch.nn.Module):
     
     def __init__(self, x_train, y_train):
         super().__init__()
+        self.scaler_x = data.ScalerStandard()
+        self.scaler_x.deactivate()
+        self.scaler_x.fit(x_train)
+        x = self.scaler_x.transform(x_train)
+        self.scaler_y = data.ScalerStandard()
+        self.scaler_y.deactivate()
+        self.scaler_y.fit(y_train)
+        self.scaler_y.transform(y_train)
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
         self.models = torch.nn.ModuleList()
-        self.optimizers = []
-        self.fns_loss = []
         for idx_model in range(y_train.shape[1]):
             self.models.append(GPExact(x_train, y_train[:,idx_model], self.likelihood))
-            self.optimizers.append(torch.optim.Adam(self.models[idx_model].parameters(), lr=0.1))
-            mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.models[idx_model])
-            self.fns_loss.append(lambda y_pred, y_train: -mll(y_pred, y_train))
 
     def forward(self, x):
+        x = self.scaler_x.transform(x)
         means = []
-        variances = []
+        stds = []
+        stds_epistemic = []
         for idx_model in range(len(self.models)):
-            distr = self.models[idx_model](x)
-            mean = distr.mean
+            # get epistemic posterior distribution
+            distr_epistemic = self.models[idx_model](x)
+            
+            # extract mean
+            mean = distr_epistemic.mean
+
+            # extract epistemic std
+            covar_epistemic = distr_epistemic.covariance_matrix
+            var_epistemic = torch.diagonal(covar_epistemic)
+            var_epistemic = torch.clamp(var_epistemic, math.exp(-10)**2, math.exp(STD_LOG_MAX)**2)
+            std_epistemic = torch.sqrt(var_epistemic)
+
+            # get posterior destribution by adding aleatoric uncertainty
+            distr = self.likelihood(distr_epistemic)
+
+            # extract std
             covar = distr.covariance_matrix
-            covar = covar.clamp(min=STD_MIN, max=STD_MAX)
-            distr = gpytorch.distributions.MultivariateNormal(mean, covar)
+            var = torch.diagonal(covar)
+            var = torch.clamp(var, math.exp(STD_LOG_MIN)**2, math.exp(STD_LOG_MAX)**2)
+            std = torch.sqrt(var)
+
+            # keep track of predictions
             means.append(mean)
-            variances.append(covar[0])
+            stds.append(std)
+            stds_epistemic.append(std_epistemic)
+
         mean = torch.stack(means, dim=-1)
-        var = torch.stack(variances, dim=-1)
-        std = torch.sqrt(var)
-        return mean, std
+        std = torch.stack(stds, dim=-1)
+        std_epistemic = torch.stack(stds_epistemic, dim=-1)
+        return mean, std, std_epistemic
 
-    def get_distr(self, x):
-        return self(x)
-
-    def step(self):
-        losses = []
-        for idx_model in range(len(self.models)): 
-            x_train = self.models[idx_model].train_inputs[0]
-            y_train = self.models[idx_model].train_targets
-            self.optimizers[idx_model].zero_grad()
-            y_pred = self.models[idx_model](x_train)
-            loss = self.fns_loss[idx_model](y_pred, y_train)
-            loss.backward()
-            self.optimizers[idx_model].step()
-            losses.append(loss.detach())
-        return losses
+    def get_distr(self, x, epistemic=False):
+        mean, std, std_epistemic = self(x)
+        mean, std = self.scaler_y.inverse_transform(mean, std)
+        if epistemic:
+            _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
+            return mean, std, std_epistemic
+        return mean, std_epistemic
 
 
 class LayerLinear(torch.nn.Module):
@@ -138,14 +155,9 @@ class NetDense(torch.nn.Module):
     def get_distr(self, x, epistemic=False):
         means, stds = self(x)
         means, stds = means[self.idxs_elites], stds[self.idxs_elites]
-        mean = torch.mean(means, dim=0)
-        var_aleatoric = torch.mean(stds**2, dim=0)
-        var_epistemic = torch.var(means, dim=0, unbiased=False)
-        var = var_aleatoric + var_epistemic
-        std = torch.sqrt(var)
+        mean, std, std_epistemic = utils.get_mean_std_of_mixture(means, stds, epistemic=True)
         mean, std = self.scaler_y.inverse_transform(mean, std)
         if epistemic:
-            std_epistemic = torch.sqrt(var_epistemic)
             _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
             return mean, std, std_epistemic
         return mean, std

@@ -62,7 +62,17 @@ class EnvPoint(gym.core.Env):
         return False
 
     def reward(self, state, act, state_next):
-        return - np.linalg.norm(state_next, axis=-1)
+        return - state_next @ state_next
+
+
+class EnvPointEscape(EnvPoint):
+
+    def reset(self, seed):
+        self._state = np.zeros(self.dim_state)
+        return np.zeros(self.dim_state)
+
+    def reward(self, state, action, state_next):
+        return state_next @ state_next
 
 
 class WrapperEnv(gym.core.Wrapper):
@@ -82,6 +92,14 @@ class WrapperEnv(gym.core.Wrapper):
         state = self.env.reset(seed=seed)
         self.state = state
         return state
+
+
+class WrapperEnvMaze(WrapperEnv):
+
+    def done(self, state):
+        if len(state.shape) == 2:
+            return np.zeros(state.shape[0], dtype=np.bool_)
+        return False
 
 
 class WrapperEnvMountainCar(WrapperEnv):
@@ -196,7 +214,7 @@ class EnvModel(gym.core.Env):
             state_next = state + y[:, 1:]
             state_next = torch.clamp(
                 state_next, self.bound_state_low, self.bound_state_high)
-            reward = reward.squeeze().cpu().numpy()
+            reward = reward.squeeze(dim=1).cpu().numpy()
             state_next = state_next.cpu().numpy()
             done = self.model_termination(state_next)
             return state_next, reward, done, {}
@@ -205,9 +223,10 @@ class EnvModel(gym.core.Env):
         state = np.expand_dims(self.state, axis=0)
         action = np.expand_dims(action, axis=0)
         state_next, reward, done, info = self._step(state, action)
-        state_next = state_next.squeeze()
-        reward = reward.squeeze()
+        state_next = state_next.squeeze(axis=0)
+        reward = reward.squeeze(axis=0)
         done = done.squeeze()
+        self.state = state_next
         return state_next, reward, done, info
 
     def rollout(self, agent, dataset, num_states_initial, max_length_rollout):

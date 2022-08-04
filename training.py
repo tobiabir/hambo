@@ -1,4 +1,5 @@
 import copy
+import gpytorch
 import numpy as np
 import torch
 import wandb
@@ -10,28 +11,44 @@ import rollout
 import utils
 
 
-def train_gp(model, dataset, args):
-    state, action, reward, state_next, done = dataset.sample(len(dataset))
-    state_action = torch.cat((state, action), dim=-1)
-    model = models.ModelGP(state_action, state_next)
+def train_gp(dataset):
+    # set up training data
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=len(dataset))
+    state, action, reward, state_next, done = next(iter(dataloader))
+    x = torch.cat((state, action), dim=-1)
+    y = torch.cat((reward, state_next - state), dim=-1)
+
+    # create model
+    model = models.ModelGP(x, y)
+
+    # train model
     model.train()
-    for idx_step in range(args.num_steps_model):
-        model.step()
-    return model
+    for idx_dim_y in range(y.shape[1]):
+        model_curr = model.models[idx_dim_y]
+        optimizer = torch.optim.Adam(model_curr.parameters(), lr=0.1)
+        mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model_curr)
+        for idx_step in range(100):
+            x_train = model_curr.train_inputs[0]
+            y_train = model_curr.train_targets
+            y_pred = model_curr(x_train)
+            loss = - mll(y_pred, y_train)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+    return model, None, None
 
 
 def get_fn_loss_map(model, weight_prior):
     """Get MAP loss function using weight_prior as weight on the prior of the posterior
     """
     def fn_loss(y_pred_mean, y_pred_std, y_train, state, action):
-        loss_mle = - torch.distributions.Normal(
-            y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
+        loss_mle = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
         distr_prior = torch.distributions.Normal(0, 1)
         loss_prior = torch.zeros(loss_mle.shape, device=loss_mle.device)
         for name, parameter in model.named_parameters():
             if "weight" in name:
-                loss_prior -= weight_prior * \
-                    distr_prior.log_prob(parameter).sum(dim=(1, 2))
+                loss_prior -= weight_prior * distr_prior.log_prob(parameter).sum(dim=(1, 2))
         loss = loss_prior + loss_mle
         return loss
     return fn_loss

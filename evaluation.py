@@ -19,12 +19,11 @@ def evaluate_agent(agent, env, num_episodes):
         reward_avg:     average cumulative reward seen in the episodes
     """
     agent.eval()
-    reward = 0
+    returns = np.zeros(num_episodes)
     for idx_episode in range(num_episodes):
-        _, _, reward_episode = rollout.rollout_episode(env, agent)
-        reward += reward_episode
-    reward_avg = reward / num_episodes
-    return reward_avg
+        _, _, return_episode = rollout.rollout_episode(env, agent)
+        returns[idx_episode] = return_episode
+    return np.mean(returns)
 
 
 def evaluate_model(model, dataset, fns_eval, device):

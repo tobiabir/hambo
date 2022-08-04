@@ -2,6 +2,7 @@ import argparse
 import d4rl
 import gym
 import json
+import numpy as np
 import os
 import pickle
 import tensorflow as tf
@@ -90,32 +91,43 @@ if __name__ == "__main__":
     # setting rng seeds
     utils.set_seeds(args.seed)
 
+    # set up environment
     env = gym.make(args.name_dataset)
     if "halfcheetah" in args.name_dataset:
         env = envs.WrapperEnvHalfCheetah(env)
     elif "hopper" in args.name_dataset:
         env = envs.WrapperEnvHopper(env)
+    elif "maze" in args.name_dataset:
+        env = envs.WrapperEnvMaze(env)
     elif "walker" in args.name_dataset:
         env = envs.WrapperEnvWalker(env)
 
-    dataset_env = env.get_dataset()
-    dataset_states_initial = data.DatasetNumpy()
-    dataset_states_initial.append_batch(list(dataset_env["observations"]))
+    # get offline data
+    dataset_env = d4rl.qlearning_dataset(env)
     state = torch.tensor(dataset_env["observations"], dtype=torch.float32)
     action = torch.tensor(dataset_env["actions"], dtype=torch.float32)
-    if args.hallucinate:
-        action_hallucinated = torch.zeros(state.shape, dtype=torch.float32)
-        action = torch.cat((action, action_hallucinated), dim=-1)
     reward = torch.tensor(dataset_env["rewards"], dtype=torch.float32).unsqueeze(dim=1)
     state_next = torch.tensor(dataset_env["next_observations"], dtype=torch.float32)
     terminal = torch.tensor(dataset_env["terminals"], dtype=torch.float32).unsqueeze(dim=1)
+
+    # set up offline dataset
+    dataset_states_initial = data.DatasetNumpy()
+    for idx_state_initial in range(100):
+        state_initial = env.reset()
+        dataset_states_initial.append(state_initial)
+    if args.hallucinate:
+        action_hallucinated = torch.zeros(state.shape, dtype=torch.float32)
+        action = torch.cat((action, action_hallucinated), dim=-1)
     dataset_env = torch.utils.data.TensorDataset(state, action, reward, state_next, terminal)
+
+    # set up model dataset
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
 
-    #checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
-    #model = checkpoint_model["model"]
-    model = torch.load(args.path_checkpoint_model, map_location=args.device)
+    # get model checkpoint
+    checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
+    model = checkpoint_model["model"]
 
+    # set up model environment
     model.eval()
     if args.hallucinate:
         EnvModel = envs.EnvModelHallucinated
@@ -126,9 +138,10 @@ if __name__ == "__main__":
     env_model = envs.WrapperEnv(env_model)
     env.env._max_episode_steps = 1000
 
+    # set up agents
     with open("policies_metadata.json", "r") as f:
         policies_metadata = json.load(f)
-    idx_policy = 60
+    idx_policy = 114
     policy_metadata = policies_metadata[idx_policy]
     print(policy_metadata)
     path_policy = policy_metadata["policy_path"]
@@ -139,6 +152,7 @@ if __name__ == "__main__":
         agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
         agent = agents.AgentConcat([agent, agent_antagonist])
 
+    # train antagonist
     if args.hallucinate:
         for idx_epoch in range(args.num_epochs):
             agent.train()
@@ -152,8 +166,15 @@ if __name__ == "__main__":
                 return_eval = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
                 print(f"idx_epoch: {idx_epoch}, return_eval: {return_eval}")
 
+    # save antagonist checkpoint
+    torch.save(agent_antagonist, "checkpoint_antagonist_tmp")
+
+    # evaluate
     return_eval_env = evaluation.evaluate_agent(agent, env, args.num_episodes_eval)    
-    return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
-    print(return_eval_env)
-    print(return_eval_model)
+    print(f"true: {return_eval_env}")
+    betas = [0.0, 0.2533, 0.5244, 0.8416, 1.2816, 2.0, 4.0]
+    for idx_beta, beta in enumerate(betas):
+        env_model.unwrapped.beta = beta
+        return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
+        print(f"beta = {beta}: {return_eval_model}")
 
