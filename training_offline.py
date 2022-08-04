@@ -218,5 +218,5 @@ if __name__ == "__main__":
             return_eval = evaluation.evaluate_agent(agent, env, args.num_episodes_eval_agent)
             return_eval_normalized = env.get_normalized_score(return_eval)
             wandb.log({"return_eval": return_eval, "return_eval_normalized": return_eval_normalized, 
-            print(f"idx_round: {idx_round}, return_eval: {return_eval}, return_eval_normalized: {return_eval_normalized")
+            print(f"idx_round: {idx_round}, return_eval: {return_eval}, return_eval_normalized: {return_eval_normalized}")
 
