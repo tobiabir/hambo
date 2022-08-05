@@ -22,8 +22,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Offline Policy Evaluation")
 
     # dataset arguments
-    parser.add_argument("--name_dataset", type=str, required=True,
-                        help="name of the dataset to use")
+    parser.add_argument("--names_dataset", type=str, nargs="+", required=True,
+                        help="names of the dataset to use")
 
     # model arguments
     parser.add_argument("--path_checkpoint_model", type=str, default=None,
@@ -91,34 +91,44 @@ if __name__ == "__main__":
     # setting rng seeds
     utils.set_seeds(args.seed)
 
+    # check if all datasets use the same environment
+    names_env = [name_dataset.split("-")[0] for name_dataset in args.names_dataset]
+    name_env = names_env[0]
+    assert all(name_env == name_env_curr for name_env_curr in names_env), "some datasets were generated from different environments"
+
     # set up environment
-    env = gym.make(args.name_dataset)
-    if "halfcheetah" in args.name_dataset:
+    env = gym.make(args.names_dataset[0])
+    if "halfcheetah" in name_env:
         env = envs.WrapperEnvHalfCheetah(env)
-    elif "hopper" in args.name_dataset:
+    elif "hopper" in name_env:
         env = envs.WrapperEnvHopper(env)
-    elif "maze" in args.name_dataset:
+    elif "maze" in name_env:
         env = envs.WrapperEnvMaze(env)
-    elif "walker" in args.name_dataset:
+    elif "walker" in name_env:
         env = envs.WrapperEnvWalker(env)
 
-    # get offline data
-    dataset_env = d4rl.qlearning_dataset(env)
-    state = torch.tensor(dataset_env["observations"], dtype=torch.float32)
-    action = torch.tensor(dataset_env["actions"], dtype=torch.float32)
-    reward = torch.tensor(dataset_env["rewards"], dtype=torch.float32).unsqueeze(dim=1)
-    state_next = torch.tensor(dataset_env["next_observations"], dtype=torch.float32)
-    terminal = torch.tensor(dataset_env["terminals"], dtype=torch.float32).unsqueeze(dim=1)
-
-    # set up offline dataset
-    dataset_states_initial = data.DatasetNumpy()
-    for idx_state_initial in range(100):
-        state_initial = env.reset()
-        dataset_states_initial.append(state_initial)
+    # get offline data and set up environment dataset
+    datasets = [d4rl.qlearning_dataset(gym.make(name_dataset)) for name_dataset in args.names_dataset]
+    state = np.concatenate(tuple(dataset["observations"] for dataset in datasets))
+    action = np.concatenate(tuple(dataset["actions"] for dataset in datasets))
+    reward = np.concatenate(tuple(dataset["rewards"] for dataset in datasets))
+    state_next = np.concatenate(tuple(dataset["next_observations"] for dataset in datasets))
+    terminal = np.concatenate(tuple(dataset["terminals"] for dataset in datasets))
+    state = torch.tensor(state, dtype=torch.float32)
+    action = torch.tensor(action, dtype=torch.float32)
+    reward = torch.tensor(reward, dtype=torch.float32).unsqueeze(dim=1)
+    state_next = torch.tensor(state_next, dtype=torch.float32)
+    terminal = torch.tensor(terminal, dtype=torch.float32).unsqueeze(dim=1)
     if args.hallucinate:
         action_hallucinated = torch.zeros(state.shape, dtype=torch.float32)
         action = torch.cat((action, action_hallucinated), dim=-1)
     dataset_env = torch.utils.data.TensorDataset(state, action, reward, state_next, terminal)
+
+    # set up initial state dataset
+    dataset_states_initial = data.DatasetNumpy()
+    for idx_state_initial in range(100):
+        state_initial = env.reset()
+        dataset_states_initial.append(state_initial)
 
     # set up model dataset
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
@@ -134,14 +144,14 @@ if __name__ == "__main__":
     else:
         EnvModel = envs.EnvModel
     env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
-    env_model = gym.wrappers.TimeLimit(env_model, 1000)
+    env_model = gym.wrappers.TimeLimit(env_model, 100)
     env_model = envs.WrapperEnv(env_model)
-    env.env._max_episode_steps = 1000
+    env.env._max_episode_steps = 100
 
     # set up agents
     with open("policies_metadata.json", "r") as f:
         policies_metadata = json.load(f)
-    idx_policy = 114
+    idx_policy = 55
     policy_metadata = policies_metadata[idx_policy]
     print(policy_metadata)
     path_policy = policy_metadata["policy_path"]
