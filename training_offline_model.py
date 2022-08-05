@@ -78,8 +78,7 @@ if __name__ == "__main__":
         env = envs.WrapperEnvWalker(env)
 
     # get offline data and set up dataset
-    envs = [gym.make(name_dataset) for name_dataset in args.names_dataset]
-    datasets = [d4rl.qlearning_dataset(env) for env in envs]
+    datasets = [d4rl.qlearning_dataset(gym.make(name_dataset)) for name_dataset in args.names_dataset]
     state = np.concatenate(tuple(dataset["observations"] for dataset in datasets))
     action = np.concatenate(tuple(dataset["actions"] for dataset in datasets))
     reward = np.concatenate(tuple(dataset["rewards"] for dataset in datasets))
