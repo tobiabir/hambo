@@ -41,6 +41,10 @@ if __name__ == "__main__":
     parser.add_argument("--beta", type=float, default=1.0,
                         help="parameter for the amount of hallucinated control (only has effect if hallucinate is set) (default: 1.0)")
 
+    # policy arguments
+    parser.add_argument("--idx_policy", type=int, default=None,
+                        help="index of the policy to evaluate (default: None)")
+
     # SAC arguments
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="discount factor for reward (default: 0.99)")
@@ -151,8 +155,7 @@ if __name__ == "__main__":
     # set up agents
     with open("policies_metadata.json", "r") as f:
         policies_metadata = json.load(f)
-    idx_policy = 55
-    policy_metadata = policies_metadata[idx_policy]
+    policy_metadata = policies_metadata[args.idx_policy]
     print(policy_metadata)
     path_policy = policy_metadata["policy_path"]
     with tf.io.gfile.GFile(os.path.join("gs://gresearch/deep-ope/d4rl/", path_policy), "rb") as f:
