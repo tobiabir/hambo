@@ -168,6 +168,11 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
 
     model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites]
 
-    scores_calibration_eval, scores_calibration_symmetric_eval = evaluation.evaluate_model(model, dataset_eval, [utils.get_scores_calibration, utils.get_scores_calibration_symmetric], device)
+    scores_calibration_eval, scores_calibration_symmetric_eval, score_calibration_agg_eval, score_calibration_symmetric_agg_eval = evaluation.evaluate_model(model, dataset_eval, [utils.get_scores_calibration, utils.get_scores_calibration_symmetric, utils.get_score_calibration_agg, utils.get_score_calibration_symmetric_agg], device)
+    print("----------------")
+    print(scores_calibration_eval)
+    print(scores_calibration_symmetric_eval)
+    print(score_calibration_agg_eval)
+    print(score_calibration_symmetric_agg_eval)
 
     return losses_eval_best, scores_calibration_eval
