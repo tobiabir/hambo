@@ -1,5 +1,6 @@
 import copy
 import gpytorch
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import wandb
@@ -170,20 +171,42 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
 
     model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites]
 
-    scores_calibration_eval, scores_calibration_symmetric_eval, score_calibration_agg_eval, score_calibration_symmetric_agg_eval = evaluation.evaluate_model(model, dataset_eval, [calibration.get_scores_calibration, calibration.get_scores_calibration_symmetric, calibration.get_score_calibration_agg, calibration.get_score_calibration_symmetric_agg], device)
+    scores_calibration_eval, scores_calibration_symmetric_eval, score_calibration_mm_eval, score_calibration_symmetric_mm_eval = evaluation.evaluate_model(model, dataset_eval, [calibration.get_scores_calibration, calibration.get_scores_calibration_symmetric, calibration.get_score_calibration_mm, calibration.get_score_calibration_symmetric_mm], device)
     print("----------------")
     print(f"temperature pre calibration: {model.temperature}")
     print(scores_calibration_eval)
     print(scores_calibration_symmetric_eval)
-    print(score_calibration_agg_eval)
-    print(score_calibration_symmetric_agg_eval)
-    print("----------------")
+    print(score_calibration_mm_eval)
+    print(score_calibration_symmetric_mm_eval)
+
+    levels_confidence = torch.linspace(0, 1, 11)
+
+    levels_confidence_empirical = scores_calibration_symmetric_eval[1]
+    plt.plot(levels_confidence, levels_confidence, color="black", linestyle="dashed")
+    plt.plot(levels_confidence, levels_confidence_empirical.numpy().T)
+    plt.xlabel("Expected Confidence Level")
+    plt.ylabel("Empirical Confidence Level")
+    plt.title("Calibration Curve (Individual Models)")
+    plt.savefig("calibration_curve_individual.png")
+    plt.clf()
+
+    levels_confidence_empirical = score_calibration_symmetric_mm_eval[1]
+    plt.plot(levels_confidence, levels_confidence, color="black", linestyle="dashed")
+    plt.plot(levels_confidence, levels_confidence_empirical, label="pre calibration")
 
     calibration.calibrate(model, dataset_calib, device)
 
-    score_calibration_symmetric_agg_eval, = evaluation.evaluate_model(model, dataset_eval, [calibration.get_score_calibration_symmetric_agg], device)
+    score_calibration_symmetric_mm_eval, = evaluation.evaluate_model(model, dataset_eval, [calibration.get_score_calibration_symmetric_mm], device)
     print("----------------")
     print(f"temperature post calibration: {model.temperature}")
-    print(score_calibration_symmetric_agg_eval)
+    print(score_calibration_symmetric_mm_eval)
+
+    levels_confidence_empirical = score_calibration_symmetric_mm_eval[1]
+    plt.plot(levels_confidence, levels_confidence_empirical, label="post calibration")
+    plt.xlabel("Expected Confidence Level")
+    plt.ylabel("Empirical Confidence Level")
+    plt.title("Calibration Curve (Moment Matching Model)")
+    plt.legend()
+    plt.savefig("calibration_curve_mm.png")
 
     return losses_eval_best, scores_calibration_eval

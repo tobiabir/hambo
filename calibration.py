@@ -22,7 +22,7 @@ def calibrate(model, dataset, device="cpu"):
         y_pred_means, y_pred_stds = model(x)
 
     def f(x):
-        score = get_score_calibration_symmetric_agg(y_pred_means, y_pred_stds, y, temperature=x)
+        score, levels_confidence_empirical = get_score_calibration_symmetric_mm(y_pred_means, y_pred_stds, y, temperature=x)
         return score
 
     # get initial score and temperature
@@ -81,13 +81,12 @@ def get_scores_calibration(y_pred_means, y_pred_stds, y_train, **kwargs):
     num_preds = y_train.shape[-2] * y_train.shape[-1]
     levels_confidence_empirical = [(y_train <= p).sum(dim=(1, 2)) / num_preds for p in percentiles]
     levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
-    print(levels_confidence_empirical)
     scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
-    return scores
+    return scores, levels_confidence_empirical
 
 
-def get_score_calibration_agg(y_pred_means, y_pred_stds, y_train, **kwargs):
-    """Get the calibration score after model aggregation. See [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
+def get_score_calibration_mm(y_pred_means, y_pred_stds, y_train, **kwargs):
+    """Get the calibration score after model aggregation via moment matching. See [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
 
     Args:
         y_pred_means:   mean predictions
@@ -96,7 +95,7 @@ def get_score_calibration_agg(y_pred_means, y_pred_stds, y_train, **kwargs):
         **kwargs:        to discard additional arguments (allows common interface with other evaluation scores)
 
     Returns:
-        score: the calibration score after model aggregation (via gauss approximation) 
+        score: the calibration score after model aggregation (via moment matching) 
     """
     distr = torch.distributions.Normal(0, 1)
     y_pred_mean, y_pred_std = utils.get_mean_std_of_mixture(y_pred_means, y_pred_stds)
@@ -106,9 +105,8 @@ def get_score_calibration_agg(y_pred_means, y_pred_stds, y_train, **kwargs):
     num_preds = y_train.shape[-2] * y_train.shape[-1]
     levels_confidence_empirical = [(y_train <= p).sum() / num_preds for p in percentiles]
     levels_confidence_empirical = torch.stack(levels_confidence_empirical)
-    print(levels_confidence_empirical)
     score = ((levels_confidence_empirical - levels_confidence)**2).sum()
-    return score
+    return score, levels_confidence_empirical
 
 
 def get_scores_calibration_symmetric(y_pred_means, y_pred_stds, y_train, **kwargs):
@@ -130,13 +128,12 @@ def get_scores_calibration_symmetric(y_pred_means, y_pred_stds, y_train, **kwarg
     num_preds = y_train.shape[-2] * y_train.shape[-1]
     levels_confidence_empirical = [(y_train_abs <= p).sum(dim=(1, 2)) / num_preds for p in percentiles]
     levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
-    print(levels_confidence_empirical)
     scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
-    return scores
+    return scores, levels_confidence_empirical
 
 
-def get_score_calibration_symmetric_agg(y_pred_means, y_pred_stds, y_train, temperature, **kwargs):
-    """Get the calibration score based on symmetric confidence intervals after model aggregation. Adapted from [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
+def get_score_calibration_symmetric_mm(y_pred_means, y_pred_stds, y_train, temperature=1.0, **kwargs):
+    """Get the calibration score based on symmetric confidence intervals after model aggregation via moment matching. Adapted from [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
 
     Args:
         y_pred_means:   mean predictions
@@ -145,7 +142,7 @@ def get_score_calibration_symmetric_agg(y_pred_means, y_pred_stds, y_train, temp
         **kwargs:        to discard additional arguments (allows common interface with other evaluation scores)
 
     Returns:
-        score: the calibration score after model aggregation (via gauss approximation) 
+        score: the calibration score after model aggregation (via moment matching) 
     """
     distr = torch.distributions.Normal(0, 1)
     y_pred_mean, y_pred_std = utils.get_mean_std_of_mixture(y_pred_means, y_pred_stds)
@@ -156,7 +153,6 @@ def get_score_calibration_symmetric_agg(y_pred_means, y_pred_stds, y_train, temp
     num_preds = y_train.shape[-2] * y_train.shape[-1]
     levels_confidence_empirical = [(y_train_abs <= p).sum() / num_preds for p in percentiles]
     levels_confidence_empirical = torch.stack(levels_confidence_empirical)
-    print(temperature, levels_confidence_empirical)
     score = ((levels_confidence_empirical - levels_confidence)**2).sum()
-    return score
+    return score, levels_confidence_empirical
 
