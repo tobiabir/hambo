@@ -135,6 +135,7 @@ class NetDense(torch.nn.Module):
         self.size_ensemble = size_ensemble
         self.num_elites = num_elites
         self.idxs_elites = torch.arange(0, num_elites)
+        self.temperature = 1.0
 
     def _apply_layers(self, x):
         x = self.scaler_x.transform(x)
@@ -157,8 +158,10 @@ class NetDense(torch.nn.Module):
         means, stds = means[self.idxs_elites], stds[self.idxs_elites]
         mean, std, std_epistemic = utils.get_mean_std_of_mixture(means, stds, epistemic=True)
         mean, std = self.scaler_y.inverse_transform(mean, std)
+        std *= self.temperature
         if epistemic:
             _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
+            std_epistemic *= self.temperature
             return mean, std, std_epistemic
         return mean, std
 

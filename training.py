@@ -5,6 +5,7 @@ import torch
 import wandb
 
 import data
+import calibration
 import evaluation
 import models
 import rollout
@@ -42,7 +43,7 @@ def train_gp(dataset):
 def get_fn_loss_map(model, weight_prior):
     """Get MAP loss function using weight_prior as weight on the prior of the posterior
     """
-    def fn_loss(y_pred_mean, y_pred_std, y_train, state, action):
+    def fn_loss(y_pred_mean, y_pred_std, y_train, state, action, **kwargs):
         loss_mle = - torch.distributions.Normal(y_pred_mean, y_pred_std).log_prob(y_train).sum(dim=2).mean(dim=1)
         distr_prior = torch.distributions.Normal(0, 1)
         loss_prior = torch.zeros(loss_mle.shape, device=loss_mle.device)
@@ -81,7 +82,7 @@ def train_ensemble_adversarial(model, dataset, agent, model_termination, weight_
     """
     fn_loss_map = get_fn_loss_map(model, weight_prior)
 
-    def fn_loss(y_pred_mean, y_pred_std, y_train, state, action):
+    def fn_loss(y_pred_mean, y_pred_std, y_train, state, action, **kwargs):
         loss_map = fn_loss_map(y_pred_mean, y_pred_std, y_train, state, action)
         distr_y_pred = torch.distributions.Normal(y_pred_mean, y_pred_std)
         with torch.no_grad():
@@ -124,10 +125,11 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
         scores_calibration_eval:    the calibration scores of the final models
     """
     model.train()
-    len_train = int(0.9 * len(dataset))
-    len_eval = len(dataset) - len_train
-    dataset_train, dataset_eval = torch.utils.data.random_split(
-        dataset, [len_train, len_eval])
+    len_train = int(0.8 * len(dataset))
+    len_calib = int(0.9 * len(dataset)) - len_train
+    len_eval = len(dataset) - len_train - len_calib
+    dataset_train, dataset_calib, dataset_eval = torch.utils.data.random_split(
+        dataset, [len_train, len_calib, len_eval])
     data.preprocess(model, dataset_train, device)
     dataloader_train = torch.utils.data.DataLoader(
         dataset=dataset_train,
@@ -168,11 +170,20 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
 
     model.idxs_elites = torch.argsort(losses_eval_best)[:model.num_elites]
 
-    scores_calibration_eval, scores_calibration_symmetric_eval, score_calibration_agg_eval, score_calibration_symmetric_agg_eval = evaluation.evaluate_model(model, dataset_eval, [utils.get_scores_calibration, utils.get_scores_calibration_symmetric, utils.get_score_calibration_agg, utils.get_score_calibration_symmetric_agg], device)
+    scores_calibration_eval, scores_calibration_symmetric_eval, score_calibration_agg_eval, score_calibration_symmetric_agg_eval = evaluation.evaluate_model(model, dataset_eval, [calibration.get_scores_calibration, calibration.get_scores_calibration_symmetric, calibration.get_score_calibration_agg, calibration.get_score_calibration_symmetric_agg], device)
     print("----------------")
+    print(f"temperature pre calibration: {model.temperature}")
     print(scores_calibration_eval)
     print(scores_calibration_symmetric_eval)
     print(score_calibration_agg_eval)
+    print(score_calibration_symmetric_agg_eval)
+    print("----------------")
+
+    calibration.calibrate(model, dataset_calib, device)
+
+    score_calibration_symmetric_agg_eval, = evaluation.evaluate_model(model, dataset_eval, [calibration.get_score_calibration_symmetric_agg], device)
+    print("----------------")
+    print(f"temperature post calibration: {model.temperature}")
     print(score_calibration_symmetric_agg_eval)
 
     return losses_eval_best, scores_calibration_eval

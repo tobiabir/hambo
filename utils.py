@@ -39,104 +39,6 @@ def set_seeds(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def get_scores_calibration(y_pred_means, y_pred_stds, y_train, *args):
-    """Get the calibration score. See [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
-
-    Args:
-        y_pred_means:   mean predictions
-        y_pred_std:     std predictions
-        y_train:        ground truth
-        *args:          to discard additional arguments which allows common interface with other evaluation scores
-
-    Returns:
-        scores: the calibration scores (one for every model in the ensemble)
-    """
-    distr = torch.distributions.Normal(0, 1)
-    y_train = (y_train - y_pred_means) / y_pred_stds
-    levels_confidence = torch.linspace(0, 1, 11, device=y_train.device) 
-    percentiles = distr.icdf(levels_confidence)
-    num_preds = y_train.shape[-2] * y_train.shape[-1]
-    levels_confidence_empirical = [(y_train <= p).sum(dim=(1, 2)) / num_preds for p in percentiles]
-    levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
-    print(levels_confidence_empirical)
-    scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
-    return scores
-
-
-def get_score_calibration_agg(y_pred_means, y_pred_stds, y_train, *args):
-    """Get the calibration score after model aggregation. See [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
-
-    Args:
-        y_pred_means:   mean predictions
-        y_pred_std:     std predictions
-        y_train:        ground truth
-        *args:          to discard additional arguments which allows common interface with other evaluation scores
-
-    Returns:
-        score: the calibration score after model aggregation (via gauss approximation) 
-    """
-    distr = torch.distributions.Normal(0, 1)
-    y_pred_mean, y_pred_std = get_mean_std_of_mixture(y_pred_means, y_pred_stds)
-    y_train = (y_train - y_pred_mean) / y_pred_std
-    levels_confidence = torch.linspace(0, 1, 11, device=y_train.device) 
-    percentiles = distr.icdf(levels_confidence)
-    num_preds = y_train.shape[-2] * y_train.shape[-1]
-    levels_confidence_empirical = [(y_train <= p).sum() / num_preds for p in percentiles]
-    levels_confidence_empirical = torch.stack(levels_confidence_empirical)
-    print(levels_confidence_empirical)
-    score = ((levels_confidence_empirical - levels_confidence)**2).sum()
-    return score
-
-
-def get_scores_calibration_symmetric(y_pred_means, y_pred_stds, y_train, *args):
-    """Get the calibration scores based on symmetric confidence intervals. Adapted from [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
-
-    Args:
-        y_pred_means:   mean predictions
-        y_pred_std:     std predictions
-        y_train:        ground truth
-        *args:          to discard additional arguments which allows common interface with other evaluation scores
-
-    Returns:
-        scores: the calibration scores (one for every model in the ensemble)
-    """
-    distr = torch.distributions.Normal(0, 1)
-    y_train_abs = torch.abs((y_train - y_pred_means) / y_pred_stds)
-    levels_confidence = torch.linspace(0, 1, 11, device=y_train.device) 
-    percentiles = distr.icdf((1 + levels_confidence) / 2) # == - icdf((1-levels_confidence) / 2)
-    num_preds = y_train.shape[-2] * y_train.shape[-1]
-    levels_confidence_empirical = [(y_train_abs <= p).sum(dim=(1, 2)) / num_preds for p in percentiles]
-    levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
-    print(levels_confidence_empirical)
-    scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
-    return scores
-
-
-def get_score_calibration_symmetric_agg(y_pred_means, y_pred_stds, y_train, *args):
-    """Get the calibration score based on symmetric confidence intervals after model aggregation. Adapted from [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
-
-    Args:
-        y_pred_means:   mean predictions
-        y_pred_std:     std predictions
-        y_train:        ground truth
-        *args:          to discard additional arguments which allows common interface with other evaluation scores
-
-    Returns:
-        score: the calibration score after model aggregation (via gauss approximation) 
-    """
-    distr = torch.distributions.Normal(0, 1)
-    y_pred_mean, y_pred_std = get_mean_std_of_mixture(y_pred_means, y_pred_stds)
-    y_train_abs = torch.abs((y_train - y_pred_mean) / y_pred_std)
-    levels_confidence = torch.linspace(0, 1, 11, device=y_train.device) 
-    percentiles = distr.icdf((1 + levels_confidence) / 2) # == - icdf((1-levels_confidence) / 2)
-    num_preds = y_train.shape[-2] * y_train.shape[-1]
-    levels_confidence_empirical = [(y_train_abs <= p).sum() / num_preds for p in percentiles]
-    levels_confidence_empirical = torch.stack(levels_confidence_empirical)
-    print(levels_confidence_empirical)
-    score = ((levels_confidence_empirical - levels_confidence)**2).sum()
-    return score
-
-
 def get_mean_std_of_mixture(means, stds, epistemic=False):
     """Get mean and std of a Gaussian mixture.
     Note that we assume independent components.
@@ -161,4 +63,44 @@ def get_mean_std_of_mixture(means, stds, epistemic=False):
         return mean, std, std_epistemic
     return mean, std
 
+
+def golden_section_search(f, a, b, eps=1e-5):
+    """Golden Section Search. Finds argmin of unimodal function f in interval [a, b].
+
+    Args:
+        f:      unimodal function
+        a:      lower limit of the interval to search in
+        b:      upper limit of the interval to search in
+        eps:    accuracy until which the search should run
+    """
+    # define needed constant g
+    g = (np.sqrt(5) - 1) / 2
+
+    # get initial values
+    # note: invariant: a < c < d < b and c = a + (1 - g) * (b - a) and d = a + g * (b - a)
+    fa = f(a)
+    fb = f(b)
+    diff = b - a
+    c = a + (1 - g) * diff
+    d = a + g * diff
+    fc = f(c)
+    fd = f(d)
+
+    # main loop
+    while diff > eps:
+        if fc < fd:
+            b, fb = d, fd
+            diff = b - a
+            d, fd = c, fc
+            c = a + (1 - g) * diff
+            fc = f(c)
+        else:
+            a, fa = c, fc
+            diff = b - a
+            c, fc = d, fd
+            d = a + g * diff
+            fd = f(d)
+
+    # return (everything in [a, b] would be reasonable)
+    return c
 

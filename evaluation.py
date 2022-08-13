@@ -46,6 +46,6 @@ def evaluate_model(model, dataset, fns_eval, device):
         y_pred_means, y_pred_stds = model(x)
         y = torch.cat((reward, state_next - state), dim=-1).to(device)
         y = model.scaler_y.transform(y)
-        scores = [fn_eval(y_pred_means, y_pred_stds, y, state, action) for fn_eval in fns_eval]
+        scores = [fn_eval(y_pred_means, y_pred_stds, y, state=state, action=action, temperature=model.temperature) for fn_eval in fns_eval]
     return scores
 
