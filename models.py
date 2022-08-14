@@ -137,6 +137,17 @@ class NetDense(torch.nn.Module):
         self.idxs_elites = torch.arange(0, num_elites)
         self.temperature = 1.0
 
+    def _aggregate_distrs(self, means, stds, epistemic=False):
+        means, stds = means[self.idxs_elites], stds[self.idxs_elites]
+        mean, std, std_epistemic = utils.get_mean_std_mm(means, stds, epistemic=True)
+        mean, std = self.scaler_y.inverse_transform(mean, std)
+        std *= self.temperature
+        if epistemic:
+            _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
+            std_epistemic *= self.temperature
+            return mean, std, std_epistemic
+        return mean, std
+
     def _apply_layers(self, x):
         x = self.scaler_x.transform(x)
         x = x.repeat(self.size_ensemble, 1, 1)
@@ -154,16 +165,8 @@ class NetDense(torch.nn.Module):
         return means, stds
 
     def get_distr(self, x, epistemic=False):
-        means, stds = self(x)
-        means, stds = means[self.idxs_elites], stds[self.idxs_elites]
-        mean, std, std_epistemic = utils.get_mean_std_of_mixture(means, stds, epistemic=True)
-        mean, std = self.scaler_y.inverse_transform(mean, std)
-        std *= self.temperature
-        if epistemic:
-            _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
-            std_epistemic *= self.temperature
-            return mean, std, std_epistemic
-        return mean, std
+        y_means, y_stds = self(x)
+        return self._aggregate_distrs(y_means, y_stds, epistemic)
 
     def load_state_dict_single(self, state_dict_new, idx_model):
         state_dict = self.layers.state_dict()

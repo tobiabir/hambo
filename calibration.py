@@ -98,7 +98,7 @@ def get_score_calibration_mm(y_pred_means, y_pred_stds, y_train, temperature=1.0
         score: the calibration score after model aggregation (via moment matching) 
     """
     distr = torch.distributions.Normal(0, 1)
-    y_pred_mean, y_pred_std = utils.get_mean_std_of_mixture(y_pred_means, y_pred_stds)
+    y_pred_mean, y_pred_std = utils.get_mean_std_mm(y_pred_means, y_pred_stds)
     y_pred_std *= temperature
     y_train_abs = torch.abs((y_train - y_pred_mean) / y_pred_std)
     levels_confidence = torch.linspace(0, 1, 11, device=y_train.device) 

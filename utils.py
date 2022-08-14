@@ -39,7 +39,7 @@ def set_seeds(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def get_mean_std_of_mixture(means, stds, epistemic=False):
+def get_mean_std_mm(means, stds, epistemic=False):
     """Get mean and std of a Gaussian mixture.
     Note that we assume independent components.
 

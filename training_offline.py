@@ -33,8 +33,8 @@ if __name__ == "__main__":
                         help="learning rate (default: 0.001)")
 
     # model environment arguments
-    parser.add_argument("--use_gauss_approx", default=False, action="store_true",
-                        help="set to use gauss approximation instead of true mixture to sample from transition model (default: False)")
+    parser.add_argument("--method_sampling", default="DS", choices=["DS", "TS1"],
+                        help="sampling method to use in model environment (see [Chua et al.](https://arxiv.org/abs/1805.12114) for explanation) (default: DS)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
                         help="set to use aleatoric noise from transition model (default: False)")
     parser.add_argument("--weight_penalty_reward", type=float, default=0.0,
