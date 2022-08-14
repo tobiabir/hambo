@@ -22,7 +22,7 @@ def calibrate(model, dataset, device="cpu"):
         y_pred_means, y_pred_stds = model(x)
 
     def f(x):
-        score, levels_confidence_empirical = get_score_calibration_symmetric_mm(y_pred_means, y_pred_stds, y, temperature=x)
+        score = get_score_calibration_mm(y_pred_means, y_pred_stds, y, temperature=x)
         return score
 
     # get initial score and temperature
@@ -63,53 +63,6 @@ def calibrate(model, dataset, device="cpu"):
 
 
 def get_scores_calibration(y_pred_means, y_pred_stds, y_train, **kwargs):
-    """Get the calibration score. See [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
-
-    Args:
-        y_pred_means:   mean predictions
-        y_pred_std:     std predictions
-        y_train:        ground truth
-        **kwargs:        to discard additional arguments (allows common interface with other evaluation scores)
-
-    Returns:
-        scores: the calibration scores (one for every model in the ensemble)
-    """
-    distr = torch.distributions.Normal(0, 1)
-    y_train = (y_train - y_pred_means) / y_pred_stds
-    levels_confidence = torch.linspace(0, 1, 11, device=y_train.device) 
-    percentiles = distr.icdf(levels_confidence)
-    num_preds = y_train.shape[-2] * y_train.shape[-1]
-    levels_confidence_empirical = [(y_train <= p).sum(dim=(1, 2)) / num_preds for p in percentiles]
-    levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
-    scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
-    return scores, levels_confidence_empirical
-
-
-def get_score_calibration_mm(y_pred_means, y_pred_stds, y_train, **kwargs):
-    """Get the calibration score after model aggregation via moment matching. See [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
-
-    Args:
-        y_pred_means:   mean predictions
-        y_pred_std:     std predictions
-        y_train:        ground truth
-        **kwargs:        to discard additional arguments (allows common interface with other evaluation scores)
-
-    Returns:
-        score: the calibration score after model aggregation (via moment matching) 
-    """
-    distr = torch.distributions.Normal(0, 1)
-    y_pred_mean, y_pred_std = utils.get_mean_std_of_mixture(y_pred_means, y_pred_stds)
-    y_train = (y_train - y_pred_mean) / y_pred_std
-    levels_confidence = torch.linspace(0, 1, 11, device=y_train.device) 
-    percentiles = distr.icdf(levels_confidence)
-    num_preds = y_train.shape[-2] * y_train.shape[-1]
-    levels_confidence_empirical = [(y_train <= p).sum() / num_preds for p in percentiles]
-    levels_confidence_empirical = torch.stack(levels_confidence_empirical)
-    score = ((levels_confidence_empirical - levels_confidence)**2).sum()
-    return score, levels_confidence_empirical
-
-
-def get_scores_calibration_symmetric(y_pred_means, y_pred_stds, y_train, **kwargs):
     """Get the calibration scores based on symmetric confidence intervals. Adapted from [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
 
     Args:
@@ -129,10 +82,10 @@ def get_scores_calibration_symmetric(y_pred_means, y_pred_stds, y_train, **kwarg
     levels_confidence_empirical = [(y_train_abs <= p).sum(dim=(1, 2)) / num_preds for p in percentiles]
     levels_confidence_empirical = torch.stack(levels_confidence_empirical, dim=1)
     scores = ((levels_confidence_empirical - levels_confidence)**2).sum(dim=1)
-    return scores, levels_confidence_empirical
+    return scores
 
 
-def get_score_calibration_symmetric_mm(y_pred_means, y_pred_stds, y_train, temperature=1.0, **kwargs):
+def get_score_calibration_mm(y_pred_means, y_pred_stds, y_train, temperature=1.0, **kwargs):
     """Get the calibration score based on symmetric confidence intervals after model aggregation via moment matching. Adapted from [Kuleshov et al.](https://proceedings.mlr.press/v80/kuleshov18a) eq. 9.
 
     Args:
@@ -154,5 +107,5 @@ def get_score_calibration_symmetric_mm(y_pred_means, y_pred_stds, y_train, tempe
     levels_confidence_empirical = [(y_train_abs <= p).sum() / num_preds for p in percentiles]
     levels_confidence_empirical = torch.stack(levels_confidence_empirical)
     score = ((levels_confidence_empirical - levels_confidence)**2).sum()
-    return score, levels_confidence_empirical
+    return score
 

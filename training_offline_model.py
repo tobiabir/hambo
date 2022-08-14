@@ -90,6 +90,7 @@ if __name__ == "__main__":
     state_next = torch.tensor(state_next, dtype=torch.float32)
     terminal = torch.tensor(terminal, dtype=torch.float32).unsqueeze(dim=1)
     dataset = torch.utils.data.TensorDataset(state, action, reward, state_next, terminal)
+    dataset = torch.utils.data.Subset(dataset, range(1000))
 
     # train model
     if args.model == "GP":
