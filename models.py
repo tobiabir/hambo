@@ -141,7 +141,7 @@ class NetDense(torch.nn.Module):
         means, stds = means[self.idxs_elites], stds[self.idxs_elites]
         mean, std, std_epistemic = utils.get_mean_std_mm(means, stds, epistemic=True)
         mean, std = self.scaler_y.inverse_transform(mean, std)
-        std *= self.temperature
+        std = std * self.temperature
         if epistemic:
             _, std_epistemic = self.scaler_y.inverse_transform(mean, std_epistemic)
             std_epistemic *= self.temperature

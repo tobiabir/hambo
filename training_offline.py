@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     # model environment arguments
     parser.add_argument("--method_sampling", default="DS", choices=["DS", "TS1"],
-                        help="sampling method to use in model environment (see [Chua et al.](https://arxiv.org/abs/1805.12114) for explanation) (default: DS)")
+                        help="sampling method to use in model environment (see [Chua et al.](https://arxiv.org/abs/1805.12114) for explanation)) (default: DS)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
                         help="set to use aleatoric noise from transition model (default: False)")
     parser.add_argument("--weight_penalty_reward", type=float, default=0.0,
@@ -49,7 +49,7 @@ if __name__ == "__main__":
                         help="discount factor for reward (default: 0.99)")
     parser.add_argument("--tau", type=float, default=0.005,
                         help="target smoothing coefficient (default: 0.005)")
-    parser.add_argument("--alpha", type=float, default=0.05,
+    parser.add_argument("--alpha", type=float, default=0.1,
                         help="regularizer weight alpha of the entropy regularization term for sac training (default: 0.1)")
     parser.add_argument("--learn_alpha", default=False, action="store_true",
                         help="set to learn alpha (default: False)")
