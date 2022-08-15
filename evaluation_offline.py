@@ -84,6 +84,11 @@ if __name__ == "__main__":
                         help="device (default: cuda if available else cpu)")
     parser.add_argument("--replay_size", type=int, default=1000000,
                         help="capacity of replay buffer (default: 1000000)")
+
+    # output arguments
+    parser.add_argument("--path_results", default=os.path.join("Results", "results_tmp"),
+                        help="path to write the results to (default: Results/results_tmp")
+
     args = parser.parse_args()
     if args.device is None:
         if torch.cuda.is_available():
@@ -140,6 +145,7 @@ if __name__ == "__main__":
     # get model checkpoint
     checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
     model = checkpoint_model["model"]
+    model.temperature = 1.0
 
     # set up model environment
     model.eval()
@@ -183,11 +189,18 @@ if __name__ == "__main__":
     torch.save(agent_antagonist, "checkpoint_antagonist_tmp")
 
     # evaluate
+    results = {}
     return_eval_env = evaluation.evaluate_agent(agent, env, args.num_episodes_eval)    
+    results["return_eval_env"] = return_eval_env
     print(f"true: {return_eval_env}")
+    results["return_eval_model"] = {}
     betas = [0.0, 0.2533, 0.5244, 0.8416, 1.2816, 2.0, 4.0]
-    for idx_beta, beta in enumerate(betas):
+    for beta in betas:
         env_model.unwrapped.beta = beta
         return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
+        results["return_eval_model"][beta] = return_eval_model
         print(f"beta = {beta}: {return_eval_model}")
+
+    # save evaluation results
+    torch.save(results, args.path_results)
 
