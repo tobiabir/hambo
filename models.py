@@ -117,15 +117,15 @@ class LayerLinear(torch.nn.Module):
 
 class NetDense(torch.nn.Module):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False, activation=torch.nn.ReLU):
         super().__init__()
         self.dim_x = dim_x
         self.layers = torch.nn.Sequential()
         self.layers.append(LayerLinear(dim_x, dim_h, size_ensemble))
-        self.layers.append(torch.nn.ReLU())
+        self.layers.append(activation())
         for idx_h in range(num_h - 1):
             self.layers.append(LayerLinear(dim_h, dim_h, size_ensemble))
-            self.layers.append(torch.nn.ReLU())
+            self.layers.append(activation())
         self.layers.append(LayerLinear(dim_h, dim_y, size_ensemble))
         self.scaler_x = data.ScalerStandard()
         self.scaler_y = data.ScalerStandard()
@@ -177,8 +177,8 @@ class NetDense(torch.nn.Module):
 
 class NetGaussHomo(NetDense):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
-        super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers)
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False, activation=torch.nn.ReLU):
+        super().__init__(dim_x, dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers, activation)
         stds_log = torch.zeros((size_ensemble, 1, dim_y))
         torch.nn.init.kaiming_uniform_(stds_log, a=math.sqrt(5))
         self.stds_log = torch.nn.parameter.Parameter(stds_log)
@@ -196,8 +196,8 @@ class NetGaussHomo(NetDense):
 
 class NetGaussHetero(NetDense):
 
-    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False):
-        super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers)
+    def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False, activation=torch.nn.ReLU):
+        super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers, activation)
         self.dim_y = dim_y
     
     def _extract_distrs(self, y):

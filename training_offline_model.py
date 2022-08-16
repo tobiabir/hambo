@@ -27,8 +27,6 @@ if __name__ == "__main__":
                         help="path to model checkpoint (default: None (no checkpointing))")
     parser.add_argument("--model", type=str, choices=["GP", "EnsembleDeterministic", "EnsembleProbabilisticHomoscedastic", "EnsembleProbabilisticHeteroscedastic"], default="EnsembleProbabilisticHeteroscedastic",
                         help="what type of model to use to learn dyamics of the environment (default: EnsembleProbabilisticHeteroscedastic)")
-    parser.add_argument("--use_scalers", default=False, action="store_true",
-                        help="set to use scalers for transition model (default: False)")
     parser.add_argument("--num_h_model", type=int, default=2,
                         help="number of hidden layers in model (only for ensembles) (default: 2)")
     parser.add_argument("--dim_h_model", type=int, default=256,
@@ -37,6 +35,10 @@ if __name__ == "__main__":
                         help="number of networks in model (default: 7)")
     parser.add_argument("--num_elites_model", type=int, default=5,
                         help="number of elite networks in model (default: 5)")
+    parser.add_argument("--use_scalers", default=False, action="store_true",
+                        help="set to use scalers for transition model (default: False)")
+    parser.add_argument("--activation_model", default="ReLU", choices=["ReLU", "GELU", "SiLU"],
+                        help="activation function to use for the hidden layers of the model (default: ReLU)")
     parser.add_argument("--weight_prior_model", type=float, default=0.0,
                         help="weight on the prior in the map estimate for model training (default: 0.0)")
     parser.add_argument("--lr_model", type=float, default=0.001,
@@ -119,6 +121,7 @@ if __name__ == "__main__":
             size_ensemble=args.size_ensemble_model,
             num_elites=args.num_elites_model,
             use_scalers=args.use_scalers,
+            activation=eval("torch.nn." + args.activation_model),
         ).to(args.device)
 
         # train ensemble
