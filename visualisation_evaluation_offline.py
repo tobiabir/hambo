@@ -13,7 +13,6 @@ if __name__ == "__main__":
     
 
     args = parser.parse_args()
-    args.paths_results *= 5
 
     width_group = 0.8
     size_group = 8
@@ -31,7 +30,6 @@ if __name__ == "__main__":
     
     plt.xticks(range(len(args.paths_results)))
     bottom, top = plt.ylim()
-    plt.ylim(top=2*top)
     plt.title("Offline Policy Evaluation")
     plt.xlabel("Policy")
     plt.ylabel("Return")

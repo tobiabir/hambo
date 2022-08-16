@@ -145,7 +145,6 @@ if __name__ == "__main__":
     # get model checkpoint
     checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
     model = checkpoint_model["model"]
-    model.temperature = 1.0
 
     # set up model environment
     model.eval()
