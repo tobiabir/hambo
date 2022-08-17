@@ -167,14 +167,21 @@ if __name__ == "__main__":
         weights = pickle.load(f)
     agent = agents.AgentDOPE(weights)
     if args.hallucinate:
+        agent_antagomist_random = agents.AgentRandom(env_model.space_action_hallucinated)
+        agent_random = agents.AgentConcat([agent, agent_antagonist_random])
         agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
         agent = agents.AgentConcat([agent, agent_antagonist])
 
     # train antagonist
     if args.hallucinate:
+        # rollout using the random antagonist to ensure good initial exploration
+        agent_random.eval()
+        env_model.rollout(agent_random, dataset_model, 2 * args.num_steps_rollout_model, args.max_length_rollout_model)
+
+        # alternating between antagonist training and rollout
         for idx_epoch in range(args.num_epochs):
             agent.train()
-            if (idx_epoch + 1) % args.interval_rollout_model == 0:
+            if (idx_epoch + 1) % args.interval_rollout_model == 0 and idx_epoch > 0:
                 env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
             dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
             for batch in dataloader:
