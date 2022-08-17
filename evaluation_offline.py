@@ -167,7 +167,7 @@ if __name__ == "__main__":
         weights = pickle.load(f)
     agent = agents.AgentDOPE(weights)
     if args.hallucinate:
-        agent_antagomist_random = agents.AgentRandom(env_model.space_action_hallucinated)
+        agent_antagonist_random = agents.AgentRandom(env_model.space_action_hallucinated)
         agent_random = agents.AgentConcat([agent, agent_antagonist_random])
         agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
         agent = agents.AgentConcat([agent, agent_antagonist])
