@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
     # set up initial state dataset
     dataset_states_initial = data.DatasetNumpy()
-    for idx_state_initial in range(100):
+    for idx_state_initial in range((args.num_epochs * args.num_steps_rollout_model) / args.interval_rollout_model):
         state_initial = env.reset()
         dataset_states_initial.append(state_initial)
 
@@ -176,13 +176,15 @@ if __name__ == "__main__":
     if args.hallucinate:
         # rollout using the random antagonist to ensure good initial exploration
         agent_random.eval()
-        env_model.rollout(agent_random, dataset_model, 2 * args.num_steps_rollout_model, args.max_length_rollout_model)
+        rollout.rollout_steps(env_model, agent_random, dataset_model, None, args.num_steps_rollout_model)
+        #env_model.rollout(agent_random, dataset_model, 2 * args.num_steps_rollout_model, args.max_length_rollout_model)
 
         # alternating between antagonist training and rollout
         for idx_epoch in range(args.num_epochs):
             agent.train()
             if (idx_epoch + 1) % args.interval_rollout_model == 0 and idx_epoch > 0:
-                env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
+                rollout.rollout_steps(env_model, agent, dataset_model, None, args.num_steps_rollout_model)
+                #env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
             dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
             for batch in dataloader:
                 loss_actor, loss_critic, loss_alpha = agent.step(batch)

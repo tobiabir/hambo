@@ -39,3 +39,4 @@ def rollout_steps(env, agent, dataset, dataset_states_initial, num_steps):
             state = env.reset()
         if dataset_states_initial is not None:
             dataset_states_initial.append(state)
+
