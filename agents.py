@@ -182,14 +182,16 @@ class AgentSAC(Agent):
         self.training = False
 
     def get_action(self, state):
+        state = torch.Tensor(state).to(self.device)
         with torch.no_grad():
-            state = torch.Tensor(state).to(self.device)
             action, mean, _ = self.policy(state)
-            if self.training:
-                action = action.cpu().numpy()
-            else:
-                action = mean.cpu().numpy()
-            return action
+        if self.training:
+            action = action.cpu().numpy()
+        else:
+            action = mean.cpu().numpy()
+        if len(state.shape) == 1:
+            action = action.squeeze(axis=0)
+        return action
 
     def step(self, data):
         state, action, reward, state_next, done = self._preprocess_data(data)
@@ -341,7 +343,5 @@ class AgentDOPE(Agent):
         std_log = x @ self.fclast_w_std_log.T + self.fclast_b_std_log
         std = np.exp(std_log)
         action = self.output_transformation(np.random.normal(mean, std))
-        if action.shape[0] == 1:
-            action = action.squeeze(axis=0)
         return action
 

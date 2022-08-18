@@ -230,7 +230,6 @@ class PolicyGauss(torch.nn.Module):
 
     def forward(self, state):
         mean, std = self.net.get_distr(state)
-        mean, std = mean.squeeze(dim=0), std.squeeze(dim=0)
         distr = torch.distributions.Normal(mean, std)
         action = distr.rsample()
         prob_log = distr.log_prob(action)

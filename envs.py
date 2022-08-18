@@ -246,8 +246,6 @@ class EnvModel(gym.core.Env):
         active = np.array([True] * num_states_initial)
         for idx_step in range(max_length_rollout):
             action = agent.get_action(state)
-            if len(action.shape) == 1:
-                action = np.expand_dims(action, axis=0)
             state_next, reward, done, info = self._step(state, action)
             returns[active] += reward
             if dataset is not None:
@@ -327,7 +325,7 @@ class EnvModelHallucinated(EnvModel):
             state_next = torch.clamp(state_next, self.bound_state_low, self.bound_state_high)
 
             # make the predictions to numpy arrays
-            reward = reward.squeeze().cpu().numpy()
+            reward = reward.squeeze(dim=1).cpu().numpy()
             state_next = state_next.cpu().numpy()
 
             # get terminals from termination model
