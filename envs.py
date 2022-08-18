@@ -242,16 +242,25 @@ class EnvModel(gym.core.Env):
 
     def rollout(self, agent, dataset, num_states_initial, max_length_rollout):
         state = self.dataset_states_initial.sample(num_states_initial)
+        returns = np.zeros(num_states_initial)
+        active = np.array([True] * num_states_initial)
         for idx_step in range(max_length_rollout):
             action = agent.get_action(state)
+            if len(action.shape) == 1:
+                action = np.expand_dims(action, axis=0)
             state_next, reward, done, info = self._step(state, action)
-            # note: termination model has no time limit (which is added via wrapper)
-            mask = done.astype(np.float32)
-            batch = list(zip(state, action, reward, state_next, mask))
-            dataset.push_batch(batch)
-            state = state_next[np.logical_not(done.squeeze())]
+            returns[active] += reward
+            if dataset is not None:
+                # note: termination model has no time limit (which is added via wrapper)
+                mask = done.astype(np.float32)
+                batch = list(zip(state, action, reward, state_next, mask))
+                dataset.push_batch(batch)
+            active_next = np.logical_not(done)
+            state = state_next[active_next]
+            active[active] = active_next
             if state.size == 0:
                 break
+        return returns
 
     def reset(self, seed=None):
         super().reset(seed=seed)

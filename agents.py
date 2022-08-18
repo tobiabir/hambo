@@ -341,5 +341,7 @@ class AgentDOPE(Agent):
         std_log = x @ self.fclast_w_std_log.T + self.fclast_b_std_log
         std = np.exp(std_log)
         action = self.output_transformation(np.random.normal(mean, std))
+        if action.shape[0] == 1:
+            action = action.squeeze(axis=0)
         return action
 

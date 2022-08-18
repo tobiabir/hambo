@@ -19,10 +19,13 @@ def evaluate_agent(agent, env, num_episodes):
         reward_avg:     average cumulative reward seen in the episodes
     """
     agent.eval()
-    returns = np.zeros(num_episodes)
-    for idx_episode in range(num_episodes):
-        _, _, return_episode = rollout.rollout_episode(env, agent)
-        returns[idx_episode] = return_episode
+    if hasattr(env, "rollout"):
+        returns = env.rollout(agent, None, num_episodes, env.env._max_episode_steps)
+    else:
+        returns = np.zeros(num_episodes)
+        for idx_episode in range(num_episodes):
+            _, _, return_episode = rollout.rollout_episode(env, agent)
+            returns[idx_episode] = return_episode
     return np.mean(returns)
 
 

@@ -191,8 +191,8 @@ if __name__ == "__main__":
                 return_eval = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
                 print(f"idx_epoch: {idx_epoch}, return_eval: {return_eval}")
 
-    # save antagonist checkpoint
-    torch.save(agent_antagonist, "checkpoint_antagonist_tmp")
+        # save antagonist checkpoint
+        torch.save(agent_antagonist, "checkpoint_antagonist_tmp")
 
     # evaluate
     results = {}
