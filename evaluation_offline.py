@@ -135,7 +135,8 @@ if __name__ == "__main__":
 
     # set up initial state dataset
     dataset_states_initial = data.DatasetNumpy()
-    for idx_state_initial in range((args.num_epochs * args.num_steps_rollout_model) / args.interval_rollout_model):
+    num_states_initial = 10000
+    for idx_state_initial in range(num_states_initial):
         state_initial = env.reset()
         dataset_states_initial.append(state_initial)
 
