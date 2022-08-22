@@ -251,7 +251,9 @@ class EnvModel(gym.core.Env):
             if dataset is not None:
                 # note: termination model has no time limit (which is added via wrapper)
                 mask = done.astype(np.float32)
-                batch = list(zip(state, action, reward, state_next, mask))
+                if isinstance(action, tuple):
+                    action = zip(*action)
+                batch = list(zip(state, *action, reward, state_next, mask))
                 dataset.push_batch(batch)
             active_next = np.logical_not(done)
             state = state_next[active_next]
@@ -285,12 +287,9 @@ class EnvModelHallucinated(EnvModel):
         with torch.no_grad():
             # make the inputs to torch tensors
             state = torch.tensor(state, dtype=torch.float32, device=self.device)
+            action, action_hallucinated = action
             action = torch.tensor(action, dtype=torch.float32, device=self.device)
-
-            # split action in action and hallucinated action
-            dim_action = self.space_action.shape[0]
-            action_hallucinated = action[:, dim_action:]
-            action = action[:, :dim_action]
+            action_hallucinated = torch.tensor(action_hallucinated, dtype=torch.int64, device=self.device)
 
             # create model input and get predictions from model
             x = torch.cat((state, action), dim=-1)
@@ -338,4 +337,66 @@ class EnvModelHallucinated(EnvModel):
         low = np.concatenate((self.space_action.low, self.space_action_hallucinated.low))
         high = np.concatenate((self.space_action.high, self.space_action_hallucinated.high))
         return gym.spaces.Box(low=low, high=high, dtype=np.float32)
+
+
+class EnvModelHallucinatedDeterministic(EnvModel):
+
+    def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args):
+        super().__init__(space_observation, space_action, dataset_states_initial, model_transition, model_termination, args)
+        self.space_action_hallucinated = gym.spaces.Discrete(model_transition.num_elites)
+
+    def _step(self, state, action):
+        with torch.no_grad():
+            # make the inputs to torch tensors
+            state = torch.tensor(state, dtype=torch.float32, device=self.device)
+            action, action_hallucinated = action
+            action = torch.tensor(action, dtype=torch.float32, device=self.device)
+            action_hallucinated = torch.tensor(action_hallucinated, dtype=torch.int64, device=self.device)
+
+            # create model input and get predictions from model
+            x = torch.cat((state, action), dim=-1)
+            y_means, y_stds = self.model_transition(x)
+
+            # extract reward predictions
+            y_mean, y_std, y_std_epistemic = self.model_transition._aggregate_distrs(y_means, y_stds, epistemic=True)
+            reward_mean = y_mean[:, :1]
+            reward_std = y_std[:, :1]
+            reward_std_epistemic = y_std_epistemic[:, :1]
+
+            # extract state_next predictions
+            y_means = y_means[self.model_transition.idxs_elites]
+            y_stds = y_stds[self.model_transition.idxs_elites]
+            idxs_batch = torch.arange(0, x.shape[0], device=self.device)
+            y_mean = y_means[action_hallucinated, idxs_batch]
+            y_std = y_stds[action_hallucinated, idxs_batch]
+            y_mean, y_std = self.model_transition.scaler_y.inverse_transform(y_mean, y_std)
+            state_next_mean = y_mean[:, 1:]
+            state_next_std = y_std[:, 1:]
+
+            # if use_aleatoric: sample using aleatoric uncertainty
+            if self.use_aleatoric:
+                reward = torch.distributions.Normal(reward_mean, reward_std).sample()
+                state_next = torch.distributions.Normal(state_next_mean, state_next_std).sample()
+            else:
+                reward = torch.distributions.Normal(reward_mean, reward_std_epistemic).sample()
+                state_next = state_next_mean
+
+            # we predict state_next - state -> add state to next state
+            state_next += state
+
+            # clamp to get valid next state
+            state_next = torch.clamp(state_next, self.bound_state_low, self.bound_state_high)
+
+            # make the predictions to numpy arrays
+            reward = reward.squeeze(dim=1).cpu().numpy()
+            state_next = state_next.cpu().numpy()
+
+            # get terminals from termination model
+            done = self.model_termination(state_next)
+
+            return state_next, reward, done, {}
+
+    @property
+    def action_space(self):
+        return gym.spaces.Tuple((self.space_action, self.space_action_hallucinated))
 

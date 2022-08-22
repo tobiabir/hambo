@@ -115,6 +115,7 @@ if __name__ == "__main__":
         env = envs.WrapperEnvMaze(env)
     elif "walker" in name_env:
         env = envs.WrapperEnvWalker(env)
+    env.reset(args.seed)
 
     # get offline data and set up environment dataset
     datasets = [d4rl.qlearning_dataset(gym.make(name_dataset)) for name_dataset in args.names_dataset]
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     dataset_states_initial = data.DatasetNumpy()
     num_states_initial = 10000
     for idx_state_initial in range(num_states_initial):
-        state_initial = env.reset()
+        state_initial = env.reset().astype(np.float32)
         dataset_states_initial.append(state_initial)
 
     # set up model dataset
@@ -150,7 +151,10 @@ if __name__ == "__main__":
     # set up model environment
     model.eval()
     if args.hallucinate:
-        EnvModel = envs.EnvModelHallucinated
+        if args.method_sampling == "DS":
+            EnvModel = envs.EnvModelHallucinated
+        else:
+            EnvModel = envs.EnvModelHallucinatedDeterministic
     else:
         EnvModel = envs.EnvModel
     env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
@@ -166,28 +170,32 @@ if __name__ == "__main__":
     path_policy = policy_metadata["policy_path"]
     with tf.io.gfile.GFile(os.path.join("gs://gresearch/deep-ope/d4rl/", path_policy), "rb") as f:
         weights = pickle.load(f)
-    agent = agents.AgentDOPE(weights)
+    agent_protagonist = agents.AgentDOPE(weights)
     if args.hallucinate:
         agent_antagonist_random = agents.AgentRandom(env_model.space_action_hallucinated)
-        agent_random = agents.AgentConcat([agent, agent_antagonist_random])
-        agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
-        agent = agents.AgentConcat([agent, agent_antagonist])
+        agent_random = agents.AgentTuple([agent_protagonist, agent_antagonist_random])
+        if args.method_sampling == "DS":
+            agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
+        else:
+            agent_antagonist = agents.AgentDQNAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
+        agent = agents.AgentTuple([agent_protagonist, agent_antagonist])
 
     # train antagonist
-    if args.hallucinate:
+    if args.hallucinate and 0 < args.num_epochs:
         # rollout using the random antagonist to ensure good initial exploration
-        agent_random.eval()
         env_model.rollout(agent_random, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
 
         # alternating between antagonist training and rollout
         for idx_epoch in range(args.num_epochs):
             agent.train()
             if (idx_epoch + 1) % args.interval_rollout_model == 0 and idx_epoch > 0:
+                if args.method_sampling == "TS1":
+                    agent_antagonist.epsilon -= 1.0 / args.num_epochs
                 env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
             dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
             for batch in dataloader:
-                loss_actor, loss_critic, loss_alpha = agent.step(batch)
-            print(f"idx_epoch: {idx_epoch}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}")
+                losses = agent.step(batch)
+            print(f"idx_epoch: {idx_epoch}, losses: {losses}")
             if (idx_epoch + 1) % args.interval_eval_agent == 0:
                 return_eval = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
                 print(f"idx_epoch: {idx_epoch}, return_eval: {return_eval}")
@@ -197,9 +205,23 @@ if __name__ == "__main__":
 
     # evaluate
     results = {}
-    return_eval_env = evaluation.evaluate_agent(agent, env, args.num_episodes_eval)    
+    return_eval_env = evaluation.evaluate_agent(agent_protagonist, env, args.num_episodes_eval)    
     results["return_eval_env"] = return_eval_env
     print(f"true: {return_eval_env}")
+
+    return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
+    print(f"pessimistic: {return_eval_model}")
+    exit()
+    
+    idxs_elites = model.idxs_elites
+    print(idxs_elites)
+    for idx_idx_elite in range(len(idxs_elites)):
+        agent_antagonist = agents.AgentModelSelectFixed(idx_idx_elite)
+        agent = agents.AgentTuple([agent_protagonist, agent_antagonist])
+        return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval) 
+        print(return_eval_model)
+    exit()
+
     results["return_eval_model"] = {}
     betas = [0.0, 0.2533, 0.5244, 0.8416, 1.2816, 2.0, 4.0]
     for beta in betas:

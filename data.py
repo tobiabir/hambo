@@ -40,19 +40,10 @@ class DatasetSARS(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         datum = self.data[idx]
-        datum = self._to_tensor(*datum)
         return datum
 
     def __len__(self):
         return len(self.data)
-
-    def _to_tensor(self, state, action, reward, state_next, done):
-        state = torch.tensor(state, dtype=torch.float32)
-        action = torch.tensor(action, dtype=torch.float32)
-        reward = torch.tensor(reward, dtype=torch.float32).unsqueeze(dim=-1)
-        state_next = torch.tensor(state_next, dtype=torch.float32)
-        done = torch.tensor(done, dtype=torch.float32).unsqueeze(dim=-1)
-        return state, action, reward, state_next, done
 
     def push(self, state, action, reward, state_next, done):
         if len(self) < self.capacity:
@@ -79,8 +70,6 @@ class DatasetSARS(torch.utils.data.Dataset):
         else:
             batch = random.sample(self.data, k=num)
         batch = list(map(np.stack, zip(*batch)))
-        batch[2] = np.expand_dims(batch[2], axis=-1)
-        batch[4] = np.expand_dims(batch[4], axis=-1)
         return batch 
 
 

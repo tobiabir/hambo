@@ -28,7 +28,7 @@ class Agent(ABC):
         pass
 
     def step(self, data):
-        return (None,) * 3
+        pass
 
     def train(self):
         pass
@@ -43,7 +43,6 @@ class AgentRandom(Agent):
 
     def __init__(self, space_action):
         self.space_action = space_action
-        self.dim_action = space_action.shape[0]
 
     def get_action(self, state):
         if len(state.shape) == 2:
@@ -145,7 +144,6 @@ class AgentSAC(Agent):
         self.device = args.device
         dim_state = space_state.shape[0]
         dim_action = space_action.shape[0]
-        self.dim_action = dim_action
         num_h = 2
         dim_h = 256
         self.critic = models.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
@@ -194,22 +192,29 @@ class AgentSAC(Agent):
         return action
 
     def step(self, data):
+        # preprocessing input
         state, action, reward, state_next, done = self._preprocess_data(data)
         state = state.to(self.device)
         action = action.to(self.device)
-        reward = reward.to(self.device)
+        reward = reward.to(self.device).unsqueeze(dim=1)
         state_next = state_next.to(self.device)
-        done = done.to(self.device)
+        done = done.to(self.device).unsqueeze(dim=1)
 
+        # computing critic target
         with torch.no_grad():
             action_next, _, prob_log_next = self.policy(state_next)
             q_target_next = torch.min(*self.critic_target(state_next, action_next))
             q_soft_target_next = q_target_next - self.alpha * prob_log_next
             q_target = reward + (1 - done) * self.gamma * q_soft_target_next
+
+        # computing critic prediction
         q1, q2 = self.critic(state, action)
+
+        # computing critic loss
         loss_q1 = torch.nn.functional.mse_loss(q1, q_target)
         loss_q2 = torch.nn.functional.mse_loss(q2, q_target)
 
+        # computing and adding conservative penalty to critic loss
         if self.conservative:
             # Note: COMBO would actually only use the model states here.
             # However I argue the action distribution shift alone already demands conservatism.
@@ -238,31 +243,40 @@ class AgentSAC(Agent):
             loss_q1 += self.weight_conservative * loss_q1_conservative
             loss_q2 += self.weight_conservative * loss_q2_conservative
 
+        # critic backpropagation
         loss_q = loss_q1 + loss_q2
         self.optim_critic.zero_grad()
         loss_q.backward()
         self.optim_critic.step()
-
+        
+        # computing actor loss
         action, _, prob_log = self.policy(state)
         q = torch.min(*self.critic(state, action))
         loss_pi = (self.alpha * prob_log - q).mean()
+
+        # actor backpropagation
         self.optim_policy.zero_grad()
         loss_pi.backward()
         self.optim_policy.step()
 
+        # computing and backpropagation of alpha loss
         if self.learn_alpha:
-            loss_alpha = -(self.alpha_log * (prob_log +
-                                         self.entropy_target).detach()).mean()
+            loss_alpha = -(self.alpha_log * (prob_log + self.entropy_target).detach()).mean()
             self.optim_alpha.zero_grad()
             loss_alpha.backward()
             self.optim_alpha.step()
             self.alpha = self.alpha_log.detach().exp()
         else:
-            loss_alpha = 0
+            loss_alpha = torch.tensor(0, dtype=torch.float32)
 
+        # soft update critic target
         utils.soft_update(self.critic_target, self.critic, self.tau)
 
-        return loss_pi, loss_q, loss_alpha
+        # returning losses
+        loss_pi = loss_pi.detach().cpu().item()
+        loss_q = loss_q.detach().cpu().item()
+        loss_alpha = loss_alpha.detach().cpu().item()
+        return {"loss_actor": loss_pi, "loss_critic": loss_q, "loss_alpha": loss_alpha}
 
     def train(self):
         self.policy.train()
@@ -282,8 +296,114 @@ class AgentSACAntagonist(AgentSAC):
         return state, action, -reward, state_next, done
 
 
-class AgentConcat(Agent):
-    """Combines agents into one agent giving one action that is the concatenation of the agents actions.
+class AgentDQN(Agent):
+    """General agent learning via [DQN](https://arxiv.org/abs/1312.5602)
+    """
+
+    def __init__(self, space_state, space_action, args):
+        super().__init__()
+        self.gamma = args.gamma
+        self.tau = args.tau
+        self.device = args.device
+        dim_state = space_state.shape[0]
+        dim_action = space_action.n
+        self.agent_random = AgentRandom(space_action)
+        num_h = 2
+        dim_h = 256
+        self.critic = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic_target = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic_target.load_state_dict(self.critic.state_dict())
+        self.critic_target.eval()
+        self.optim_critic = torch.optim.Adam(self.critic.parameters(), lr=args.lr_agent)
+        self.epsilon = 1.0
+        self.training = True
+
+    def _preprocess_data(iself, data):
+        return data
+
+    def eval(self):
+        self.critic.eval()
+        self.training = False
+
+    def get_action(self, state):
+        if self.training and np.random.rand() < self.epsilon:
+            return self.agent_random.get_action(state)
+        state = torch.Tensor(state).to(self.device)
+        with torch.no_grad():
+            q = self.critic.get_distr(state)[0]
+        action = torch.argmax(q, dim=1)
+        action = action.cpu().numpy()
+        if len(state.shape) == 1:
+            action = action.squeeze(axis=0)
+        return action
+
+    def step(self, data):
+        # preparing input
+        state, action, reward, state_next, done = self._preprocess_data(data)
+        state = state.to(self.device)
+        action = action.to(self.device)
+        reward = reward.to(self.device)
+        state_next = state_next.to(self.device)
+        done = done.to(self.device)
+
+        # computing target
+        with torch.no_grad():
+            q_target_next, _ = self.critic_target.get_distr(state_next)[0].max(dim=1)
+            q_target = reward + (1 - done) * self.gamma * q_target_next
+
+        # computing prediction
+        idxs_batch = torch.arange(0, state.shape[0], device=self.device)
+        q = self.critic.get_distr(state)[0][idxs_batch, action]
+
+        # computing loss
+        loss_q = torch.nn.functional.smooth_l1_loss(q, q_target)
+    
+        # backpropagation
+        self.optim_critic.zero_grad()
+        loss_q.backward()
+        self.optim_critic.step()
+        
+        # soft update of target model
+        utils.soft_update(self.critic_target, self.critic, self.tau)
+        
+        # return loss
+        loss_q = loss_q.detach().cpu().item()
+        return {"loss_critic": loss_q}
+
+    def train(self):
+        self.critic.train()
+        self.training = True
+
+
+class AgentDQNAntagonist(AgentDQN):
+    """General agent learning to get minimal reward via [DQN](https://arxiv.org/abs/1312.5602)
+    """
+
+    def __init__(self, space_state, space_action, args):
+        super().__init__(space_state, space_action, args)
+
+    def _preprocess_data(self, data):
+        state, action, reward, state_next, done = data
+        return state, action, -reward, state_next, done
+
+
+class AgentModelSelectFixed(Agent):
+    """Agent always selecting a fixed model.
+    """
+
+    def __init__(self, idx_model):
+        super().__init__()
+        self.idx_model = idx_model
+
+    def get_action(self, state):
+        if len(state.shape) == 1:
+            return np.array(idx_model)
+        else:
+            return np.array([self.idx_model] * state.shape[0])
+
+
+class AgentTuple(Agent):
+    """Combines agents into one agent giving one action that is the tuple containing the agents actions.
     """
     
     def __init__(self, agents):
@@ -295,20 +415,16 @@ class AgentConcat(Agent):
             agent.eval()
 
     def get_action(self, state):
-        actions = [agent.get_action(state) for agent in self.agents]
-        action = np.concatenate(actions, axis=-1)
+        action = tuple(agent.get_action(state) for agent in self.agents)
         return action
 
     def step(self, data):
         state, action, reward, state_next, done = data
-        dims_action = [agent.dim_action for agent in self.agents]
-        idxs_split = np.cumsum(dims_action)[:-1]
-        actions = np.split(action, idxs_split, axis=-1)
         losses = []
         for idx_agent in range(len(self.agents)):
-            loss = self.agents[idx_agent].step((state, actions[idx_agent], reward, state_next, done))
+            loss = self.agents[idx_agent].step((state, action[idx_agent], reward, state_next, done))
             losses.append(loss)
-        return list(zip(*losses))
+        return losses
             
     def train(self):
         for agent in self.agents:
@@ -332,7 +448,6 @@ class AgentDOPE(Agent):
         self.nonlinearity = np.tanh if weights["nonlinearity"] == "tanh" else relu
         identity = lambda x: x
         self.output_transformation = np.tanh if weights["output_distribution"] == "tanh_gaussian" else identity
-        self.dim_action = self.fclast_w.shape[0]
 
     def get_action(self, state):
         x = state @ self.fc0_w.T + self.fc0_b
