@@ -109,10 +109,7 @@ class SamplerBatchRatio():
         self.len1 = len1
         self.len2 = len2
         self.num_batches = num_batches
-        if len2 == 0:
-            self.size_batch1 = size_batch
-        else:
-            self.size_batch1 = int(ratio * size_batch)
+        self.size_batch1 = int(ratio * size_batch)
         self.size_batch2 = size_batch - self.size_batch1
 
     def __iter__(self):
@@ -135,17 +132,23 @@ def preprocess(model, dataset, device="cpu"):
     model.scaler_y.fit(y)
 
 
-def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio, num_workers=1):
-    dataset = torch.utils.data.ConcatDataset((dataset1, dataset2))
-    num_samples = num_batches * size_batch
-    #sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=num_samples)
-    sampler_batch = SamplerBatchRatio(len(dataset1), len(dataset2), num_batches, size_batch, ratio)
-    dataloader = torch.utils.data.DataLoader(
-        dataset=dataset,
-        #batch_size=size_batch,
-        #sampler=sampler,
-        batch_sampler=sampler_batch,
-        num_workers=num_workers,
-    )
+def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio=1.0, num_workers=1):
+    if dataset2 is None or len(dataset2) == 0 or ratio == 1.0:
+        num_samples = num_batches * size_batch
+        sampler = torch.utils.data.RandomSampler(dataset1, replacement=True, num_samples=num_samples)
+        dataloader = torch.utils.data.DataLoader(
+            dataset=dataset1,
+            batch_size=size_batch,
+            sampler=sampler,
+            num_workers=num_workers,
+        )
+    else:
+        dataset = torch.utils.data.ConcatDataset((dataset1, dataset2))
+        sampler_batch = SamplerBatchRatio(len(dataset1), len(dataset2), num_batches, size_batch, ratio)
+        dataloader = torch.utils.data.DataLoader(
+            dataset=dataset,
+            batch_sampler=sampler_batch,
+            num_workers=num_workers,
+        )
     return dataloader
 

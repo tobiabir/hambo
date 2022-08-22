@@ -253,7 +253,7 @@ class EnvModel(gym.core.Env):
                 mask = done.astype(np.float32)
                 if isinstance(action, tuple):
                     action = zip(*action)
-                batch = list(zip(state, *action, reward, state_next, mask))
+                batch = list(zip(state, action, reward, state_next, mask))
                 dataset.push_batch(batch)
             active_next = np.logical_not(done)
             state = state_next[active_next]
