@@ -202,19 +202,7 @@ if __name__ == "__main__":
     results["return_eval_env"] = return_eval_env
     print(f"true: {return_eval_env}")
     
-    if args.method_sampling == "DS":
-        results["return_eval_model"] = {}
-        betas = [0.0, 0.2533, 0.5244, 0.8416, 1.2816, 2.0, 4.0]
-        for beta in betas:
-            env_model.unwrapped.beta = beta
-            return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
-            results["return_eval_model"][beta] = return_eval_model
-            print(f"pessimistic (beta = {beta}): {return_eval_model}")
-    elif args.method_sampling == "TS1":
-        return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
-        results["return_eval_model"] = return_eval_model
-        print(f"pessimistic: {return_eval_model}")
-    else:
+    if args.method_sampling == "TSInf":
         idxs_elites = model.idxs_elites
         returns_eval_model = np.zeros(len(idxs_elites))
         for idx_idx_elite in range(len(idxs_elites)):
@@ -226,6 +214,10 @@ if __name__ == "__main__":
             return_eval_model = returns_eval_model.min()
         else:
             return_eval_modek = returns_eval_model.mean()
+        results["return_eval_model"] = return_eval_model
+        print(f"pessimistic: {return_eval_model}")
+    else:
+        return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
         results["return_eval_model"] = return_eval_model
         print(f"pessimistic: {return_eval_model}")
 

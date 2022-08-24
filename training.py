@@ -148,7 +148,9 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
     while (idx_epoch_curr - 5 <= idxs_epoch_best).any():
         model.train()
         for state, action, reward, state_next, done in dataloader_train:
-            x = torch.cat((state, action), dim=-1)[:, :model.dim_x].to(device)
+            reward = reward.unsqueeze(dim=1)
+            done = done.unsqueeze(dim=1)
+            x = torch.cat((state, action[0]), dim=-1).to(device)
             y_pred_means, y_pred_stds = model(x)
             y = torch.cat((reward, state_next - state), dim=-1).to(device)
             y = model.scaler_y.transform(y)

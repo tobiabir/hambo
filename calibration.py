@@ -15,7 +15,8 @@ def calibrate(model, dataset, device="cpu"):
     model.eval()
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
     state, action, reward, state_next, _ = next(iter(dataloader)) 
-    x = torch.cat((state, action), dim=-1)[:, :model.dim_x].to(device)
+    reward = reward.unsqueeze(dim=1)
+    x = torch.cat((state, action[0]), dim=-1).to(device)
     y = torch.cat((reward, state_next - state), dim=-1).to(device)
     y = model.scaler_y.transform(y)
     with torch.no_grad():

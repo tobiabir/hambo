@@ -1,9 +1,9 @@
+import numpy as np
+
 import data
 
 
 def rollout_episode(env, agent):
-    dim_action = env.action_space.shape[0]
-
     dataset = data.DatasetSARS()
     reward_episode = 0
     idx_step = 0
@@ -12,10 +12,10 @@ def rollout_episode(env, agent):
     state_initial = state
     done = False
     while not done:
-        action = agent.get_action(state)[:dim_action]
+        action = agent.get_action(state)[0]
         state_next, reward, done, info = env.step(action)
 
-        mask = float(done and not info["TimeLimit.truncated"])
+        mask = np.float32(done and not info["TimeLimit.truncated"])
         dataset.push(state, action, reward, state_next, mask)
 
         state = state_next
@@ -27,12 +27,11 @@ def rollout_episode(env, agent):
 
 
 def rollout_steps(env, agent, dataset, dataset_states_initial, num_steps):
-    dim_action = env.action_space.shape[0]
     state = env.state
     for idx_step in range(num_steps):
         action = agent.get_action(state)
-        state_next, reward, done, info = env.step(action[:dim_action])
-        mask = float(done and not info["TimeLimit.truncated"])
+        state_next, reward, done, info = env.step(action[0])
+        mask = np.float32(done and not info["TimeLimit.truncated"])
         dataset.push(state, action, reward, state_next, mask)
         state = state_next
         if done:

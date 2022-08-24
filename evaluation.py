@@ -44,8 +44,9 @@ def evaluate_model(model, dataset, fns_eval, device):
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
     model.eval()
     with torch.no_grad():
-        state, action, reward, state_next, done = next(iter(dataloader))
-        x = torch.cat((state, action), dim=-1)[:, :model.dim_x].to(device)
+        state, action, reward, state_next, _ = next(iter(dataloader))
+        reward = reward.unsqueeze(dim=1)
+        x = torch.cat((state, action[0]), dim=-1).to(device)
         y_pred_means, y_pred_stds = model(x)
         y = torch.cat((reward, state_next - state), dim=-1).to(device)
         y = model.scaler_y.transform(y)

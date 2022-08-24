@@ -113,7 +113,7 @@ if __name__ == "__main__":
     utils.set_seeds(args.seed)
 
     if args.name_env == "Point":
-        env = envs.EnvPoint()
+        env = envs.EnvPoint(dim_state=2)
         env = gym.wrappers.TimeLimit(env, 100)
         env = envs.WrapperEnv(env)
     elif args.name_env == "MountainCar":
@@ -134,11 +134,6 @@ if __name__ == "__main__":
     elif args.name_env == "HalfCheetah":
         env = gym.make("HalfCheetah-v3")
         env = envs.WrapperEnvHalfCheetah(env)
-
-    dim_action = env.action_space.shape[0]
-
-    args.idx_step = 0
-    args.idx_step_agent_global = 0
 
     if args.model == "GP":
         Model = None  # TODO
@@ -162,17 +157,23 @@ if __name__ == "__main__":
         EnvModel = envs.EnvModelHallucinated
     else:
         EnvModel = envs.EnvModel
-    env_model = EnvModel(env.observation_space,
-                         env.action_space, None, model, env.done, args)
+    env_model = EnvModel(env.observation_space, env.action_space, None, model, env.done, args)
     env_model = gym.wrappers.TimeLimit(
         env_model, args.max_length_rollout_model)
     env_model = envs.WrapperEnv(env_model)
     env_eval = copy.deepcopy(env)
     has_trained_model = False
 
-    agent_random = agents.AgentRandom(env_model.action_space)
-    agent = agents.AgentSAC(env_model.observation_space,
-                            env_model.action_space, args)
+    agent_random = agents.AgentRandom(env.action_space)
+    agent_protagonist = agents.AgentSAC(env.observation_space, env.action_space, args)
+    if args.hallucinate:
+        agent_random_hallucinate = agents.AgentRandom(env_model.space_action_hallucinated)
+        agent_random = agents.AgentTuple([agent_random, agent_random_hallucinate])
+        agent_hallucinate = agents.AgentSAC(env_model.observation_space, env_model.space_action_hallucinated, args)
+        agent = agents.AgentTuple([agent_protagonist, agent_hallucinate])
+    else:
+        agent_random = agents.AgentTuple([agent_random])
+        agent = agents.AgentTuple([agent_protagonist])
 
     dataset_env = data.DatasetSARS(capacity=args.replay_size)
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
@@ -182,17 +183,15 @@ if __name__ == "__main__":
     dataset_states_initial.append(state)
 
     print("startup...")
-    rollout.rollout_steps(env, agent_random, dataset_env,
-                          dataset_states_initial, args.num_steps_startup)
-    args.idx_step += args.num_steps_startup
+    rollout.rollout_steps(env, agent_random, dataset_env, dataset_states_initial, args.num_steps_startup)
 
     state = env.state
 
     for idx_step in range(args.num_steps_startup, args.num_steps):
         agent.train()
         action = agent.get_action(state)
-        state_next, reward, done, info = env.step(action[:dim_action])
-        mask = float(done and not info["TimeLimit.truncated"])
+        state_next, reward, done, info = env.step(action[0])
+        mask = np.float32(done and not info["TimeLimit.truncated"])
         dataset_env.push(state, action, reward, state_next, mask)
         state = state_next
         if done:
@@ -209,20 +208,17 @@ if __name__ == "__main__":
             model.eval()
             env_model = EnvModel(env.observation_space, env.action_space,
                                  dataset_states_initial, model, env.done, args)
-            env_model = gym.wrappers.TimeLimit(
-                env_model, args.max_length_rollout_model)
+            env_model = gym.wrappers.TimeLimit(env_model, args.max_length_rollout_model)
             env_model = envs.WrapperEnv(env_model)
-            env_model.rollout(
-                agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
+            env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
         if (idx_step + 1) % args.interval_train_agent == 0:
             dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
             for batch in dataloader:
-                loss_actor, loss_critic, loss_alpha = agent.step(batch)
-            wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_step": idx_step})
-            print(f"idx_step: {idx_step}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}, alpha: {agent.alpha}")
+                loss_agent = agent.step(batch)
+            #wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_step": idx_step})
+            print(f"idx_step: {idx_step}, loss_agent: {loss_agent}")
         if (idx_step + 1) % args.interval_eval_agent == 0:
             return_eval = evaluation.evaluate_agent(agent, env_eval, args.num_episodes_eval_agent)
             wandb.log({"return_eval": return_eval, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, return_eval: {return_eval}")
-        args.idx_step = idx_step
 

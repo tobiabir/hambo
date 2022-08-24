@@ -139,7 +139,7 @@ class WrapperEnvHopper(WrapperEnv):
     def done(self, state):
         height = state[..., 0]
         angle = state[..., 1]
-        not_done = np.isfinite(state).all(axis=-1) * np.abs(state[..., 1:] < 100).all(axis=-1) * (height > 0.7) * (np.abs(angle) < 0.2)
+        not_done = np.isfinite(state).all(axis=-1) * (np.abs(state[..., 1:]) < 100).all(axis=-1) * (height > 0.7) * (np.abs(angle) < 0.2)
         done = ~not_done
         return done
 
@@ -289,7 +289,7 @@ class EnvModelHallucinated(EnvModel):
             state = torch.tensor(state, dtype=torch.float32, device=self.device)
             action, action_hallucinated = action
             action = torch.tensor(action, dtype=torch.float32, device=self.device)
-            action_hallucinated = torch.tensor(action_hallucinated, dtype=torch.int64, device=self.device)
+            action_hallucinated = torch.tensor(action_hallucinated, dtype=torch.float32, device=self.device)
 
             # create model input and get predictions from model
             x = torch.cat((state, action), dim=-1)
