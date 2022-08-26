@@ -163,6 +163,29 @@ class WrapperEnvWalker(WrapperEnv):
         return is_healthy
 
 
+class WrapperEnvProtagonist(gym.core.Wrapper):
+
+    def __init__(self, env, agent):
+        super().__init__(env)
+        self.agent = agent
+        self.state = None
+    
+    def step(self, action):
+        action = self.agent.get_action(self.state), action
+        state_next, reward, done, info = self.env.step(action)
+        self.state = state_next
+        return state_next, -reward, done, info
+
+    def reset(self, seed=None):
+        state = self.env.reset(seed=seed)
+        self.state = state
+        return state
+
+    @property
+    def action_space(self):
+        return self.env.space_action_hallucinated
+        
+
 class EnvModel(gym.core.Env):
 
     def __init__(self, space_observation, space_action, dataset_states_initial, model_transition, model_termination, args):
@@ -232,7 +255,10 @@ class EnvModel(gym.core.Env):
 
     def step(self, action):
         state = np.expand_dims(self.state, axis=0)
-        action = np.expand_dims(action, axis=0)
+        if isinstance(action, tuple):
+            action = tuple(np.expand_dims(action, axis=0) for action in action)
+        else:
+            action = np.expand_dims(action, axis=0)
         state_next, reward, done, info = self._step(state, action)
         state_next = state_next.squeeze(axis=0)
         reward = reward.squeeze(axis=0)
@@ -265,7 +291,7 @@ class EnvModel(gym.core.Env):
     def reset(self, seed=None):
         super().reset(seed=seed)
         self.state = self.dataset_states_initial.sample(1)[0]
-        return self.state.copy()
+        return self.state
 
     @property
     def observation_space(self):

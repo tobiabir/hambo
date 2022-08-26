@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
     # set up initial state dataset
     dataset_states_initial = data.DatasetNumpy()
-    num_states_initial = 10000
+    num_states_initial = 100000
     for idx_state_initial in range(num_states_initial):
         state_initial = env.reset().astype(np.float32)
         dataset_states_initial.append(state_initial)
@@ -198,11 +198,19 @@ if __name__ == "__main__":
 
     # evaluate
     results = {}
-    return_eval_env = evaluation.evaluate_agent(agent_protagonist, env, args.num_episodes_eval)    
+    return_eval_env = evaluation.evaluate_agent(agents.AgentTuple([agent_protagonist]), env, args.num_episodes_eval)    
     results["return_eval_env"] = return_eval_env
     print(f"true: {return_eval_env}")
     
-    if args.method_sampling == "TSInf":
+    if args.method_sampling == "DS":
+        results["return_eval_model"] = {}
+        betas = [0.0, 0.2533, 0.5244, 0.8416, 1.2816, 2.0, 4.0]
+        for beta in betas:
+            env_model.unwrapped.beta = beta
+            return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
+            results["return_eval_model"][beta] = return_eval_model
+            print(f"pessimistic (beta = {beta}): {return_eval_model}")
+    elif args.method_sampling == "TSInf":
         idxs_elites = model.idxs_elites
         returns_eval_model = np.zeros(len(idxs_elites))
         for idx_idx_elite in range(len(idxs_elites)):
