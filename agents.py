@@ -150,22 +150,19 @@ class AgentSAC(Agent):
         self.critic_target = models.NetDoubleQ(dim_state, dim_action, num_h, dim_h).to(self.device)
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_target.eval()
-        self.optim_critic = torch.optim.Adam(
-            self.critic.parameters(), lr=args.lr_agent)
+        self.optim_critic = torch.optim.Adam(self.critic.parameters(), lr=args.lr_agent)
         bound_action_low = space_action.low[0]
         bound_action_high = space_action.high[0]
-        self.policy = models.PolicyGauss(
-            dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high).to(self.device)
-        self.optim_policy = torch.optim.Adam(
-            self.policy.parameters(), lr=args.lr_agent)
+        self.policy = models.PolicyGauss(dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high).to(self.device)
+        self.optim_policy = torch.optim.Adam(self.policy.parameters(), lr=args.lr_agent)
         self.entropy_target = -np.prod(space_action.shape).astype(np.float32)
         self.learn_alpha = args.learn_alpha
         if self.learn_alpha:
-            self.alpha_log = torch.tensor(0., requires_grad=True).to(self.device)
-            self.alpha = self.alpha_log.detach().exp()
+            self.alpha_log = torch.tensor(0, dtype=torch.float32, device=self.device, requires_grad=True)
             self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=args.lr_agent)
+            self.alpha = self.alpha_log.detach().exp()
         else:
-            self.alpha = args.alpha
+            self.alpha = torch.tensor(args.alpha, dtype=torch.float32, device=self.device)
         self.conservative = args.conservative
         self.weight_conservative = 5.0
         self.size_batch_env = int(args.ratio_env_model * args.size_batch)
@@ -180,7 +177,7 @@ class AgentSAC(Agent):
         self.training = False
 
     def get_action(self, state):
-        state = torch.Tensor(state).to(self.device)
+        state = torch.tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             action, mean, _ = self.policy(state)
         if self.training:
@@ -276,7 +273,8 @@ class AgentSAC(Agent):
         loss_pi = loss_pi.detach().cpu().item()
         loss_q = loss_q.detach().cpu().item()
         loss_alpha = loss_alpha.detach().cpu().item()
-        return {"loss_actor": loss_pi, "loss_critic": loss_q, "loss_alpha": loss_alpha}
+        alpha = self.alpha.item()
+        return {"loss_actor": loss_pi, "loss_critic": loss_q, "loss_alpha": loss_alpha, "alpha": alpha}
 
     def train(self):
         self.policy.train()
@@ -328,7 +326,7 @@ class AgentDQN(Agent):
     def get_action(self, state):
         if self.training and np.random.rand() < self.epsilon:
             return self.agent_random.get_action(state)
-        state = torch.Tensor(state).to(self.device)
+        state = torch.tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             q = self.critic.get_distr(state)[0]
         action = torch.argmax(q, dim=1)
