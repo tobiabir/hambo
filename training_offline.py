@@ -2,6 +2,7 @@ import argparse
 import copy
 import d4rl
 import gym
+import numpy as np
 import torch
 import wandb
 
@@ -167,15 +168,19 @@ if __name__ == "__main__":
     dataset_env = env.get_dataset()
     dataset_states_initial = data.DatasetNumpy()
     dataset_states_initial.append_batch(list(dataset_env["observations"]))
-    state = torch.tensor(dataset_env["observations"], dtype=torch.float32)
-    action = torch.tensor(dataset_env["actions"], dtype=torch.float32)
+    state = dataset_env["observations"]
+    action = dataset_env["actions"]
     if use_model and args.hallucinate:
-        action_hallucinated = torch.zeros(state.shape, dtype=torch.float32)
-        action = torch.cat((action, action_hallucinated), dim=-1)
-    reward = torch.tensor(dataset_env["rewards"], dtype=torch.float32).unsqueeze(dim=1)
-    state_next = torch.tensor(dataset_env["next_observations"], dtype=torch.float32)
-    terminal = torch.tensor(dataset_env["terminals"], dtype=torch.float32).unsqueeze(dim=1)
-    dataset_env = torch.utils.data.TensorDataset(state, action, reward, state_next, terminal)
+        if args.method_sampling == "DS":
+            action_hallucinated = np.zeros(state.shape, dtype=np.float32)
+        else:
+            action_hallucinated = np.zeros(state.shape[0], dtype=np.int64)
+        action = action, action_hallucinated
+    reward = dataset_env["rewards"]
+    state_next = dataset_env["next_observations"]
+    terminal = dataset_env["terminals"]
+    dataset_env = data.DatasetSARS()
+    dataset_env.push_batch(list(zip(state, zip(*action), reward, state_next, terminal)))
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
 
     if use_model:
@@ -184,7 +189,10 @@ if __name__ == "__main__":
 
         model.eval()
         if args.hallucinate:
-            EnvModel = envs.EnvModelHallucinated
+            if args.method_sampling == "DS":
+                EnvModel = envs.EnvModelHallucinated
+            else:
+                EnvModel = envs.EnvModelHallucinatedDeterministic
         else:
             EnvModel = envs.EnvModel
         env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
@@ -193,8 +201,11 @@ if __name__ == "__main__":
 
     agent = agents.AgentSAC(env.observation_space, env.action_space, args)
     if use_model and args.hallucinate:
-        agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
-        agent = agents.AgentConcat([agent, agent_antagonist])
+        if args.method_sampling == "DS":
+            agent_antagonist = agents.AgentSACAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
+        else:
+            agent_antagonist = agents.AgentDQNAntagonist(env.observation_space, env_model.space_action_hallucinated, args)
+        agent = agents.AgentTuple([agent, agent_antagonist])
 
     for idx_round in range(args.num_rounds):
         agent.train()
@@ -203,12 +214,9 @@ if __name__ == "__main__":
             env_model.rollout(agent, dataset_model, args.num_steps_rollout_model, args.max_length_rollout_model)
         dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
         for batch in dataloader:
-            loss_actor, loss_critic, loss_alpha = agent.step(batch)
-        if use_model and args.hallucinate:
-            wandb.log({"loss_actor": loss_actor[0], "loss_critic": loss_critic[0], "loss_alpha": loss_alpha[0], "alpha": agent.agents[0].alpha, "loss_actor_antagonist": loss_actor[1], "loss_critic_antagonist": loss_critic[1], "loss_alpha_antagonist": loss_alpha[1], "alpha_antagonist": agent.agents[1].alpha, "idx_round": idx_round})
-        else:
-            wandb.log({"loss_actor": loss_actor, "loss_critic": loss_critic, "loss_alpha": loss_alpha, "alpha": agent.alpha, "idx_round": idx_round})
-        print(f"idx_round: {idx_round}, loss_actor: {loss_actor}, loss_critic: {loss_critic}, loss_alpha: {loss_alpha}")
+            losses = agent.step(batch)
+        wandb.log({"losses": losses, "idx_round": idx_round})
+        print(f"idx_round: {idx_round}, losses: {losses}")
         if train_adversarial and (idx_round + 1) % args.interval_train_model_adversarial == 0:
             model.train()
             losses_model, scores_calibration = training.train_ensemble_adversarial(model, dataset_env, agent, env_model.model_termination, args.weight_prior_model, args.gamma, args.weight_loss_adversarial_model, args.lr_model, args.size_batch, args.device)

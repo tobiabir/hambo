@@ -82,16 +82,12 @@ if __name__ == "__main__":
     # get offline data and set up dataset
     datasets = [d4rl.qlearning_dataset(gym.make(name_dataset)) for name_dataset in args.names_dataset]
     state = np.concatenate(tuple(dataset["observations"] for dataset in datasets))
-    action = np.concatenate(tuple(dataset["actions"] for dataset in datasets))
+    action = np.concatenate(tuple(dataset["actions"] for dataset in datasets)),
     reward = np.concatenate(tuple(dataset["rewards"] for dataset in datasets))
     state_next = np.concatenate(tuple(dataset["next_observations"] for dataset in datasets))
     terminal = np.concatenate(tuple(dataset["terminals"] for dataset in datasets))
-    state = torch.tensor(state, dtype=torch.float32)
-    action = torch.tensor(action, dtype=torch.float32)
-    reward = torch.tensor(reward, dtype=torch.float32).unsqueeze(dim=1)
-    state_next = torch.tensor(state_next, dtype=torch.float32)
-    terminal = torch.tensor(terminal, dtype=torch.float32).unsqueeze(dim=1)
-    dataset = torch.utils.data.TensorDataset(state, action, reward, state_next, terminal)
+    dataset = data.DatasetSARS()
+    dataset.push_batch(list(zip(state, zip(*action), reward, state_next, terminal)))
 
     # train model
     if args.model == "GP":
