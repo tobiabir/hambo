@@ -36,6 +36,8 @@ if __name__ == "__main__":
     # model environment arguments
     parser.add_argument("--method_sampling", default="DS", choices=["DS", "TS1"],
                         help="sampling method to use in model environment (see [Chua et al.](https://arxiv.org/abs/1805.12114) for explanation)) (default: DS)")
+    parser.add_argument("--calibrate", default=False, action="store_true",
+                        help="set to use calibration for transition model (default: False)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
                         help="set to use aleatoric noise from transition model (default: False)")
     parser.add_argument("--weight_penalty_reward", type=float, default=0.0,
@@ -186,6 +188,8 @@ if __name__ == "__main__":
     if use_model:
         checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
         model = checkpoint_model["model"]
+        if not args.calibrate:
+            model.temperature = 1.0
 
         model.eval()
         if args.hallucinate:
