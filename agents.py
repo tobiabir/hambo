@@ -159,7 +159,7 @@ class AgentSAC(Agent):
         self.learn_alpha = args.learn_alpha
         if self.learn_alpha:
             self.alpha_log = torch.tensor(0, dtype=torch.float32, device=self.device, requires_grad=True)
-            self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=args.lr_agent)
+            self.optim_alpha = torch.optim.Adam([self.alpha_log], lr=0.05*args.lr_agent)
             self.alpha = self.alpha_log.detach().exp()
         else:
             self.alpha = torch.tensor(args.alpha, dtype=torch.float32, device=self.device)
