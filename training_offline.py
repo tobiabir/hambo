@@ -215,8 +215,8 @@ if __name__ == "__main__":
         dataloader = data.get_dataloader(dataset_env, dataset_model, args.num_steps_train_agent, args.size_batch, args.ratio_env_model)
         for batch in dataloader:
             losses = agent.step(batch)
-        wandb.log({"losses": losses, "idx_round": idx_round})
-        print(f"idx_round: {idx_round}, losses: {losses}")
+        wandb.log({"agent_protagonist": losses[0], "agent_antagonist": losses[1], "idx_round": idx_round})
+        print(f"idx_round: {idx_round}, agent_protagonist: {losses[0]}, agent_antagonist: {losses[1]}")
         if train_adversarial and (idx_round + 1) % args.interval_train_model_adversarial == 0:
             model.train()
             losses_model, scores_calibration = training.train_ensemble_adversarial(model, dataset_env, agent, env_model.model_termination, args.weight_prior_model, args.gamma, args.weight_loss_adversarial_model, args.lr_model, args.size_batch, args.device)
