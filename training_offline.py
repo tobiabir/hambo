@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # dataset arguments
     parser.add_argument("--name_env", type=str, choices=["HalfCheetah", "Hopper", "Walker"], required=True,
                         help="name of the environment")
-    parser.add_argument("--name_task", type=str, choices=["random", "medium", "expert"],  required=True,
+    parser.add_argument("--name_task", type=str, choices=["random", "medium", "expert", "medium-expert"],  required=True,
                         help="name of the task")
 
     # model arguments
