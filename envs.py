@@ -155,8 +155,8 @@ class WrapperEnvHalfCheetah(WrapperEnv):
 class WrapperEnvWalker(WrapperEnv):
     
     def done(self, state):
-        z = state[..., :1]
-        angle = state[..., 1:2]
+        z = state[..., 0]
+        angle = state[..., 1]
         is_healthy_z = np.logical_and(0.8 < z, z < 2.0)
         is_healthy_angle = np.logical_and(-1.0 < angle, angle < 1.0)
         is_healthy = np.logical_and(is_healthy_z, is_healthy_angle)
