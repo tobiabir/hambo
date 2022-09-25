@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # procedure arguments
     parser.add_argument("--size_batch", type=int, default=256,
                         help="batch size (default: 256)")
-    parser.add_argument("--num_epochs", type=int, default=0,
+    parser.add_argument("--num_rounds", type=int, default=0,
                         help="number of episodes to train (default: 0)")
     parser.add_argument("--interval_rollout_model", type=int, default=1,
                         help="interval of steps after which a round of training is done (default: 1)")
@@ -98,10 +98,10 @@ if __name__ == "__main__":
 
     # assert correct usage
     if args.hallucinate:
-        assert args.method_sampling == "TSInf" or 0 < args.num_epochs, "An adversary has to be trained for DS and TS1 -> num_epochs should be greater than 0"
-        assert args.method_sampling != "TSInf" or args.num_epochs == 0, "No training required for TSInf -> num_epochs should be 0!"
+        assert args.method_sampling == "TSInf" or 0 < args.num_rounds, "An adversary has to be trained for DS and TS1 -> num_rounds should be greater than 0"
+        assert args.method_sampling != "TSInf" or args.num_rounds == 0, "No training required for TSInf -> num_rounds should be 0!"
     else:
-        assert args.num_epochs == 0, "No training required without hallucination -> hallucinate should not be set!"
+        assert args.num_rounds == 0, "No training required without hallucination -> hallucinate should not be set!"
 
     # setting rng seeds
     utils.set_seeds(args.seed)
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     agent_protagonist = agents.AgentDOPE(weights)
 
     # train antagonist
-    if 0 < args.num_epochs:
+    if 0 < args.num_rounds:
         # set up antagonist
         agent_antagonist_random = agents.AgentRandom(env_model.space_action_hallucinated)
         agent_random = agents.AgentTuple([agent_protagonist, agent_antagonist_random])
@@ -173,19 +173,19 @@ if __name__ == "__main__":
         env_model.rollout(agent_random, dataset_model, args.num_episodes_rollout_model, args.max_length_rollout_model)
 
         # alternating between antagonist training and rollout
-        for idx_epoch in range(args.num_epochs):
+        for idx_round in range(args.num_rounds):
             agent.train()
-            if (idx_epoch + 1) % args.interval_rollout_model == 0 and idx_epoch > 0:
+            if (idx_round + 1) % args.interval_rollout_model == 0 and idx_round > 0:
                 if args.method_sampling == "TS1":
-                    agent_antagonist.epsilon -= 1.0 / args.num_epochs
+                    agent_antagonist.epsilon -= 1.0 / args.num_rounds
                 env_model.rollout(agent, dataset_model, args.num_episodes_rollout_model, args.max_length_rollout_model)
             dataloader = data.get_dataloader(dataset_model, None, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
                 losses = agent.step(batch)
-            print(f"idx_epoch: {idx_epoch}, losses: {losses}")
-            if (idx_epoch + 1) % args.interval_eval_agent == 0:
+            print(f"idx_round: {idx_round}, losses: {losses}")
+            if (idx_round + 1) % args.interval_eval_agent == 0:
                 return_eval = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
-                print(f"idx_epoch: {idx_epoch}, return_eval: {return_eval}")
+                print(f"idx_round: {idx_round}, return_eval: {return_eval}")
 
         # save antagonist checkpoint
         torch.save(agent_antagonist, "checkpoint_antagonist_tmp")
