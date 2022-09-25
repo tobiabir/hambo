@@ -139,16 +139,10 @@ if __name__ == "__main__":
 
     # set up model environment
     model.eval()
-    if args.hallucinate:
-        if args.method_sampling == "DS":
-            EnvModel = envs.EnvModelHallucinated
-        else:
-            EnvModel = envs.EnvModelHallucinatedDeterministic
+    if args.hallucinate or args.method_sampling == "TSInf":
+        EnvModel = envs.EnvModelHallucinated
     else:
-        if args.method_sampling == "TSInf":
-            EnvModel = envs.EnvModelHallucinatedDeterministic
-        else:
-            EnvModel = envs.EnvModel
+        EnvModel = envs.EnvModel
     env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
     env_model = gym.wrappers.TimeLimit(env_model, 1000)
     env_model = envs.WrapperEnv(env_model)
@@ -195,6 +189,9 @@ if __name__ == "__main__":
 
         # save antagonist checkpoint
         torch.save(agent_antagonist, "checkpoint_antagonist_tmp")
+    
+    else:
+        agent = agent_protagonist
 
     # evaluate
     results = {}
@@ -202,15 +199,7 @@ if __name__ == "__main__":
     results["return_eval_env"] = return_eval_env
     print(f"true: {return_eval_env}")
     
-    if args.method_sampling == "DS":
-        results["return_eval_model"] = {}
-        betas = [0.0, 0.2533, 0.5244, 0.8416, 1.2816, 2.0, 4.0]
-        for beta in betas:
-            env_model.unwrapped.beta = beta
-            return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
-            results["return_eval_model"][beta] = return_eval_model
-            print(f"pessimistic (beta = {beta}): {return_eval_model}")
-    elif args.method_sampling == "TSInf":
+    if args.method_sampling == "TSInf":
         idxs_elites = model.idxs_elites
         returns_eval_model = np.zeros(len(idxs_elites))
         for idx_idx_elite in range(len(idxs_elites)):
@@ -218,16 +207,21 @@ if __name__ == "__main__":
             agent = agents.AgentTuple([agent_protagonist, agent_antagonist])
             return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval) 
             returns_eval_model[idx_idx_elite] = return_eval_model
+        return_eval_model_mean = returns_eval_model.mean()
+        return_eval_model_std = returns_eval_model.std()
         if args.hallucinate:
             return_eval_model = returns_eval_model.min()
         else:
-            return_eval_modek = returns_eval_model.mean()
+            return_eval_model = return_eval_model_mean
         results["return_eval_model"] = return_eval_model
-        print(f"pessimistic: {return_eval_model}")
+        results["return_eval_model_mean"] = return_eval_model_mean
+        results["return_eval_model_std"] = return_eval_model_std
+        print(f"estimated: mean: {return_eval_model_mean}, std: {return_eval_model_std}")
+        print(f"estimated: {return_eval_model}")
     else:
         return_eval_model = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
         results["return_eval_model"] = return_eval_model
-        print(f"pessimistic: {return_eval_model}")
+        print(f"estimated: {return_eval_model}")
 
     # save evaluation results
     torch.save(results, args.path_results)

@@ -4,7 +4,7 @@ import torch
 
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from gpytorch.models import ExactGP 
+from gpytorch.models import ExactGP
 
 import data
 import utils
@@ -28,7 +28,7 @@ class GPExact(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean, covar)
 
 class ModelGP(torch.nn.Module):
-    
+
     def __init__(self, x_train, y_train):
         super().__init__()
         self.scaler_x = data.ScalerStandard()
@@ -52,7 +52,7 @@ class ModelGP(torch.nn.Module):
         for idx_model in range(len(self.models)):
             # get epistemic posterior distribution
             distr_epistemic = self.models[idx_model](x)
-            
+
             # extract mean
             mean = distr_epistemic.mean
 
@@ -91,7 +91,7 @@ class ModelGP(torch.nn.Module):
 
 
 class LayerLinear(torch.nn.Module):
-    
+
     def __init__(self, dim_x, dim_y, size_ensemble=1):
         super().__init__()
         self.weight = torch.nn.parameter.Parameter(torch.zeros((size_ensemble, dim_x, dim_y)))
@@ -152,7 +152,7 @@ class NetDense(torch.nn.Module):
         x = self.scaler_x.transform(x)
         x = x.repeat(self.size_ensemble, 1, 1)
         y = self.layers(x)
-        return y 
+        return y
 
     def _extract_distrs(self, y):
         means = y
@@ -199,7 +199,7 @@ class NetGaussHetero(NetDense):
     def __init__(self, dim_x, dim_y, num_h, dim_h, size_ensemble=1, num_elites=1, use_scalers=False, activation=torch.nn.ReLU):
         super().__init__(dim_x, 2 * dim_y, num_h, dim_h, size_ensemble, num_elites, use_scalers, activation)
         self.dim_y = dim_y
-    
+
     def _extract_distrs(self, y):
         means = y[..., :self.dim_y]
         stds_log = y[..., self.dim_y:]
