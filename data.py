@@ -86,9 +86,9 @@ class ScalerStandard():
     def deactivate(self):
         self.active = False
 
-    def fit(self, data):
-        self.mean = torch.mean(data, dim=0)
-        self.std = torch.std(data, dim=0)
+    def fit(self, data, device="cpu"):
+        self.mean = torch.mean(data, dim=0).to(device)
+        self.std = torch.std(data, dim=0).to(device)
 
     def transform(self, data):
         if not self.active:
@@ -127,10 +127,10 @@ def preprocess(model, dataset, device="cpu"):
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=len(dataset))
     state, action, reward, state_next, _ = next(iter(dataloader))
     reward = reward.unsqueeze(dim=1)
-    x = torch.cat((state, action[0]), dim=-1).to(device)
-    y = torch.cat((reward, state_next - state), dim=-1).to(device)
-    model.scaler_x.fit(x)
-    model.scaler_y.fit(y)
+    x = torch.cat((state, action[0]), dim=-1)
+    y = torch.cat((reward, state_next - state), dim=-1)
+    model.scaler_x.fit(x, device)
+    model.scaler_y.fit(y, device)
 
 
 def get_dataloader(dataset1, dataset2, num_batches, size_batch, ratio=1.0, num_workers=1):
