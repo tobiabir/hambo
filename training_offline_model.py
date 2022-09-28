@@ -19,8 +19,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Transition Model training for Offline RL")
 
     # dataset arguments
-    parser.add_argument("--names_dataset", type=str, nargs="+", required=True,
-                        help="names of the dataset to use")
+    parser.add_argument("--paths_dataset", type=str, nargs="+", required=True,
+                        help="paths or names of the datasets to use")
 
     # model arguments
     parser.add_argument("--path_checkpoint_model", type=str, default=None,
@@ -63,31 +63,25 @@ if __name__ == "__main__":
     # setting rng seeds
     utils.set_seeds(args.seed)
 
-    # check if all datasets use the same environment
-    names_env = [name_dataset.split("-")[0] for name_dataset in args.names_dataset]
-    name_env = names_env[0]
-    assert all(name_env == name_env_curr for name_env_curr in names_env), "some datasets were generated from different environments"
-
-    # set up environment
-    env = gym.make(args.names_dataset[0])
-    if "halfcheetah" in name_env:
-        env = envs.WrapperEnvHalfCheetah(env)
-    elif "hopper" in name_env:
-        env = envs.WrapperEnvHopper(env)
-    elif "maze" in name_env:
-        env = envs.WrapperEnvMaze(env)
-    elif "walker" in name_env:
-        env = envs.WrapperEnvWalker(env)
-
-    # get offline data and set up dataset
-    datasets = [d4rl.qlearning_dataset(gym.make(name_dataset)) for name_dataset in args.names_dataset]
-    state = np.concatenate(tuple(dataset["observations"] for dataset in datasets))
-    action = np.concatenate(tuple(dataset["actions"] for dataset in datasets)),
-    reward = np.concatenate(tuple(dataset["rewards"] for dataset in datasets))
-    state_next = np.concatenate(tuple(dataset["next_observations"] for dataset in datasets))
-    terminal = np.concatenate(tuple(dataset["terminals"] for dataset in datasets))
-    dataset = data.DatasetSARS()
-    dataset.push_batch(list(zip(state, zip(*action), reward, state_next, terminal)))
+    # get offline data and set up dataset and env (for observation- and action space)
+    if os.path.isfile(args.paths_dataset[0]):
+        datasets = []
+        for path_dataset in args.paths_dataset:
+            checkpoint = torch.load(path_dataset)
+            dataset = checkpoint["dataset"]
+            datasets.append(dataset)
+        dataset = torch.utils.data.ConcatDataset(datasets)
+        env = gym.make(checkpoint["id_env"])
+    else:
+        datasets = [d4rl.qlearning_dataset(gym.make(name_dataset)) for name_dataset in args.paths_dataset]
+        state = np.concatenate(tuple(dataset["observations"] for dataset in datasets))
+        action = np.concatenate(tuple(dataset["actions"] for dataset in datasets)),
+        reward = np.concatenate(tuple(dataset["rewards"] for dataset in datasets))
+        state_next = np.concatenate(tuple(dataset["next_observations"] for dataset in datasets))
+        terminal = np.concatenate(tuple(dataset["terminals"] for dataset in datasets))
+        dataset = data.DatasetSARS()
+        dataset.push_batch(list(zip(state, zip(*action), reward, state_next, terminal)))
+        env = gym.make(args.paths_dataset[0])
 
     # train model
     if args.model == "GP":
@@ -128,7 +122,7 @@ if __name__ == "__main__":
 
     # create checkpoint
     checkpoint = {
-        "name_dataset": args.names_dataset,
+        "paths_dataset": args.paths_dataset,
         "losses_model": losses_model,
         "scores_calibration": scores_calibration,
         "model": model,
