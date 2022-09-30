@@ -285,6 +285,7 @@ class AgentSAC(Agent):
         else:
             self.alpha.to(device)
         self.device = device
+        return self
 
     def train(self):
         self.policy.train()
@@ -382,6 +383,7 @@ class AgentDQN(Agent):
         self.critic.to(device)
         self.critic_target.to(device)
         self.device = device
+        return self
 
     def train(self):
         self.critic.train()
@@ -442,6 +444,7 @@ class AgentTuple(Agent):
     def to(self, device):
         for agnet in self.agents:
             agent.to(device)
+        return self
             
     def train(self):
         for agent in self.agents:
