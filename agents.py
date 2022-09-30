@@ -411,7 +411,7 @@ class AgentFixed(Agent):
 
     def get_action(self, state):
         with torch.no_grad():
-            action = self.agent.get_action(stat)
+            action = self.agent.get_action(state)
         return action
 
     def step(self, data):
