@@ -151,7 +151,7 @@ class AgentSAC(Agent):
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_target.eval()
         self.optim_critic = torch.optim.Adam(self.critic.parameters(), lr=args.lr_agent)
-        bound_acton_low = space_action.low[0]
+        bound_action_low = space_action.low[0]
         bound_action_high = space_action.high[0]
         self.policy = models.PolicyGauss(dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high).to(self.device)
         self.optim_policy = torch.optim.Adam(self.policy.parameters(), lr=args.lr_agent)
