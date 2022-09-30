@@ -276,6 +276,16 @@ class AgentSAC(Agent):
         alpha = self.alpha.item()
         return {"loss_actor": loss_pi, "loss_critic": loss_q, "loss_alpha": loss_alpha, "alpha": alpha}
 
+    def to(self, device):
+        self.critic.to(device)
+        self.critic_target.to(device)
+        self.policy.to(device)
+        if self.learn_alpha:
+            self.alpha_log.to(device)
+        else:
+            self.alpha.to(device)
+        self.device = device
+
     def train(self):
         self.policy.train()
         self.critic.train()
@@ -368,6 +378,11 @@ class AgentDQN(Agent):
         loss_q = loss_q.detach().cpu().item()
         return {"loss_critic": loss_q}
 
+    def to(self, device):
+        self.critic.to(device)
+        self.critic_target.to(device)
+        self.device = device
+
     def train(self):
         self.critic.train()
         self.training = True
@@ -423,6 +438,10 @@ class AgentTuple(Agent):
             loss = self.agents[idx_agent].step((state, action[idx_agent], reward, state_next, done))
             losses.append(loss)
         return losses
+
+    def to(self, device):
+        for agnet in self.agents:
+            agent.to(device)
             
     def train(self):
         for agent in self.agents:
