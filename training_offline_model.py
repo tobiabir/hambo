@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # setting rng seeds
     utils.set_seeds(args.seed)
 
-    # get offline data and set up dataset and env (for observation- and action space)
+    # get offline data and set up dataset and env (to get observation- and action space)
     if os.path.isfile(args.paths_dataset[0]):
         datasets = []
         for path_dataset in args.paths_dataset:
@@ -71,7 +71,7 @@ if __name__ == "__main__":
             dataset = checkpoint["dataset"]
             datasets.append(dataset)
         dataset = torch.utils.data.ConcatDataset(datasets)
-        env = gym.make(checkpoint["id_env"])
+        id_env = checkpoint["id_env"]
     else:
         datasets = [d4rl.qlearning_dataset(gym.make(name_dataset)) for name_dataset in args.paths_dataset]
         state = np.concatenate(tuple(dataset["observations"] for dataset in datasets))
@@ -81,7 +81,8 @@ if __name__ == "__main__":
         terminal = np.concatenate(tuple(dataset["terminals"] for dataset in datasets))
         dataset = data.DatasetSARS()
         dataset.push_batch(list(zip(state, zip(*action), reward, state_next, terminal)))
-        env = gym.make(args.paths_dataset[0])
+        id_env = args.paths_dataset[0]
+    env = gym.make(id_env)
 
     # train model
     if args.model == "GP":
@@ -116,12 +117,13 @@ if __name__ == "__main__":
 
         # train ensemble
         losses_model, scores_calibration = training.train_ensemble_map(model, dataset, args.weight_prior_model, args.lr_model, args.size_batch, args.device)
-   
+
     # print evaluation scores
     print(f"losses_model: {losses_model}, scores_calibration: {scores_calibration}")
 
     # create checkpoint
     checkpoint = {
+        "id_env": id_env,
         "paths_dataset": args.paths_dataset,
         "losses_model": losses_model,
         "scores_calibration": scores_calibration,
@@ -130,4 +132,3 @@ if __name__ == "__main__":
 
     # save checkpoint
     torch.save(checkpoint, args.path_checkpoint_model)
-
