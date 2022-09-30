@@ -409,7 +409,7 @@ class AgentFixed(Agent):
     def __init__(self, agent):
         self.agent = agent
 
-    def get_action(self, state)
+    def get_action(self, state):
         with torch.no_grad():
             action = self.agent.get_action(stat)
         return action
