@@ -20,15 +20,13 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Offline Policy Evaluation")
 
-    # dataset arguments
-    parser.add_argument("--names_dataset", type=str, nargs="+", required=True,
-                        help="names of the dataset to use")
-
     # model arguments
     parser.add_argument("--path_checkpoint_model", type=str, default=None,
                         help="path to model checkpoint (default: None (no checkpointing))")
 
     # model environment arguments
+    parser.add_argument("--max_length_rollout_model", type=int, default=1000,
+                        help="number of steps to rollout model from initial state (a.k.a. episode length) (default: 1000)")
     parser.add_argument("--method_sampling", default="DS", choices=["DS", "TS1", "TSInf"],
                         help="sampling method to use in model environment (see [Chua et al.](https://arxiv.org/abs/1805.12114) for explanation) (default: DS)")
     parser.add_argument("--use_aleatoric", default=False, action="store_true",
@@ -41,8 +39,8 @@ if __name__ == "__main__":
                         help="parameter for the amount of hallucinated control (only has effect if hallucinate is set) (default: 1.0)")
 
     # policy arguments
-    parser.add_argument("--idx_policy", type=int, default=None,
-                        help="index of the policy to evaluate (default: None)")
+    parser.add_argument("--path_agent", type=str,
+                        help="path/index of the agent/policy to evaluate (default: None)")
 
     # agent learning arguments
     parser.add_argument("--gamma", type=float, default=0.99,
@@ -88,7 +86,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args.ratio_env_model = 0.0 # we train the adversary only on model data
-    args.max_length_rollout_model = 1000 # all mujoco environments have a limit of 1000
     if args.device is None:
         if torch.cuda.is_available():
             args.device = "cuda"
@@ -106,20 +103,20 @@ if __name__ == "__main__":
     # setting rng seeds
     utils.set_seeds(args.seed)
 
-    # check if all datasets use the same environment
-    names_env = [name_dataset.split("-")[0] for name_dataset in args.names_dataset]
-    name_env = names_env[0]
-    assert all(name_env == name_env_curr for name_env_curr in names_env), "some datasets were generated from different environments"
+    # get model checkpoint
+    checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
+    model = checkpoint_model["model"]
+    id_env = checkpoint_model["id_env"]
 
     # set up environment
-    env = gym.make(args.names_dataset[0])
-    if "halfcheetah" in name_env:
+    env = gym.make(id_env)
+    if "HalfCheetah" in id_env:
         env = envs.WrapperEnvHalfCheetah(env)
-    elif "hopper" in name_env:
+    elif "Hopper" in id_env:
         env = envs.WrapperEnvHopper(env)
-    elif "maze" in name_env:
-        env = envs.WrapperEnvMaze(env)
-    elif "walker" in name_env:
+    elif "Pendulum" in id_env:
+        env = envs.WrapperEnvPendulum(env)
+    elif "Walker" in id_env:
         env = envs.WrapperEnvWalker(env)
     env.reset(args.seed)
 
@@ -133,10 +130,6 @@ if __name__ == "__main__":
     # set up model dataset
     dataset_model = data.DatasetSARS(capacity=args.replay_size)
 
-    # get model checkpoint
-    checkpoint_model = torch.load(args.path_checkpoint_model, map_location=args.device)
-    model = checkpoint_model["model"]
-
     # set up model environment
     model.eval()
     if args.hallucinate or args.method_sampling == "TSInf":
@@ -144,19 +137,25 @@ if __name__ == "__main__":
     else:
         EnvModel = envs.EnvModel
     env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
-    env_model = gym.wrappers.TimeLimit(env_model, 1000)
+    env_model = gym.wrappers.TimeLimit(env_model, args.max_length_rollout_model)
     env_model = envs.WrapperEnv(env_model)
-    env.env._max_episode_steps = 1000
+    env.env._max_episode_steps = args.max_length_rollout_model
 
     # set up protagonist
-    with open("policies_metadata.json", "r") as f:
-        policies_metadata = json.load(f)
-    policy_metadata = policies_metadata[args.idx_policy]
-    print(policy_metadata)
-    path_policy = policy_metadata["policy_path"]
-    with tf.io.gfile.GFile(os.path.join("gs://gresearch/deep-ope/d4rl/", path_policy), "rb") as f:
-        weights = pickle.load(f)
-    agent_protagonist = agents.AgentDOPE(weights)
+    if os.path.isfile(args.path_agent):
+        checkpoint = torch.load(args.path_agent)
+        print(checkpoint["agent"])
+        agent_protagonist = checkpoint["agent"].agents[0]
+    else:
+        with open("policies_metadata.json", "r") as f:
+            policies_metadata = json.load(f)
+        idx_policy = int(args.path_agent)
+        policy_metadata = policies_metadata[idx_policy]
+        print(policy_metadata)
+        path_policy = policy_metadata["policy_path"]
+        with tf.io.gfile.GFile(os.path.join("gs://gresearch/deep-ope/d4rl/", path_policy), "rb") as f:
+            weights = pickle.load(f)
+        agent_protagonist = agents.AgentDOPE(weights)
 
     # train antagonist
     if 0 < args.num_rounds:
