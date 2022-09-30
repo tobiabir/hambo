@@ -143,9 +143,9 @@ if __name__ == "__main__":
 
     # set up protagonist
     if os.path.isfile(args.path_agent):
-        checkpoint = torch.load(args.path_agent)
-        print(checkpoint["agent"])
-        agent_protagonist = checkpoint["agent"].agents[0]
+        checkpoint_agent = torch.load(args.path_agent)
+        agent_protagonist = checkpoint_agent["agent"].agents[0]
+        agent_protagonist = agents.AgentFixed(agent_protagonist)
     else:
         with open("policies_metadata.json", "r") as f:
             policies_metadata = json.load(f)

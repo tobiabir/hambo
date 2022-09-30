@@ -71,7 +71,7 @@ class AgentPolynomial(Agent):
 class AgentPointRandom(Agent):
     """Agent taking random actions for the Point environment.
     """
-    
+
     def __init__(self, alpha, beta):
         super().__init__()
         self.distr = torch.distributions.Beta(alpha, beta)
@@ -116,7 +116,7 @@ class AgentPointEscapeOptimal(Agent):
 class AgentPointOptimalAntagonist(Agent):
     """Agent taking the optimal adversarial actions for the Point environment.
     """
-    
+
     def get_action(self, state):
         action_abs = np.ones(state.shape)
         action = np.sign(state) * action_abs
@@ -126,12 +126,12 @@ class AgentPointOptimalAntagonist(Agent):
 class AgentPointEscapeOptimalAntagonist(Agent):
     """Agent taking the optimal adversarial actions for the PointEscape environment.
     """
-    
+
     def get_action(self, state):
         action_abs = np.ones(state.shape)
         action = - np.sign(state) * action_abs
         return action
-        
+
 
 class AgentSAC(Agent):
     """General agent learning via [SAC](https://arxiv.org/abs/1801.01290).
@@ -151,7 +151,7 @@ class AgentSAC(Agent):
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_target.eval()
         self.optim_critic = torch.optim.Adam(self.critic.parameters(), lr=args.lr_agent)
-        bound_action_low = space_action.low[0]
+        bound_acton_low = space_action.low[0]
         bound_action_high = space_action.high[0]
         self.policy = models.PolicyGauss(dim_state, dim_action, num_h, dim_h, bound_action_low, bound_action_high).to(self.device)
         self.optim_policy = torch.optim.Adam(self.policy.parameters(), lr=args.lr_agent)
@@ -229,14 +229,14 @@ class AgentSAC(Agent):
 
             cat_q1 = torch.cat([q1_random - prob_log_random, q1_next - prob_log_next_tmp.detach(), q1_curr - prob_log_tmp.detach()], dim=1)
             cat_q2 = torch.cat([q2_random - prob_log_random, q2_next - prob_log_next_tmp.detach(), q2_curr - prob_log_tmp.detach()], dim=1)
-                
+
             # Note: As model data has action distribution shift even for rollout length 1
             # it always makes sense to exclude model data here.
             q1_env, q2_env = self.critic(state[:self.size_batch_env], action[:self.size_batch_env])
 
             loss_q1_conservative = torch.logsumexp(cat_q1, dim=1,).mean() - q1_env.mean()
             loss_q2_conservative = torch.logsumexp(cat_q2, dim=1,).mean() - q2_env.mean()
-            
+
             loss_q1 += self.weight_conservative * loss_q1_conservative
             loss_q2 += self.weight_conservative * loss_q2_conservative
 
@@ -245,7 +245,7 @@ class AgentSAC(Agent):
         self.optim_critic.zero_grad()
         loss_q.backward()
         self.optim_critic.step()
-        
+
         # computing actor loss
         action, _, prob_log = self.policy(state)
         q = torch.min(*self.critic(state, action))
@@ -366,15 +366,15 @@ class AgentDQN(Agent):
 
         # computing loss
         loss_q = torch.nn.functional.smooth_l1_loss(q, q_target)
-    
+
         # backpropagation
         self.optim_critic.zero_grad()
         loss_q.backward()
         self.optim_critic.step()
-        
+
         # soft update of target model
         utils.soft_update(self.critic_target, self.critic, self.tau)
-        
+
         # return loss
         loss_q = loss_q.detach().cpu().item()
         return {"loss_critic": loss_q}
@@ -402,6 +402,19 @@ class AgentDQNAntagonist(AgentDQN):
         return state, action, -reward, state_next, done
 
 
+class AgentFixed(Agent):
+    """Agent that does not train.
+    """
+
+    def __init__(self, agent):
+        self.agent = agent
+
+    def get_agtion(self, state)
+        with torch.no_grad():
+            action = self.agent.get_action(stat)
+        return action
+
+
 class AgentModelSelectFixed(Agent):
     """Agent always selecting a fixed model.
     """
@@ -420,7 +433,7 @@ class AgentModelSelectFixed(Agent):
 class AgentTuple(Agent):
     """Combines agents into one agent giving one action that is the tuple containing the agents actions.
     """
-    
+
     def __init__(self, agents):
         super().__init__()
         self.agents = agents
@@ -445,7 +458,7 @@ class AgentTuple(Agent):
         for agnet in self.agents:
             agent.to(device)
         return self
-            
+
     def train(self):
         for agent in self.agents:
             agent.train()
@@ -479,4 +492,3 @@ class AgentDOPE(Agent):
         std = np.exp(std_log)
         action = self.output_transformation(np.random.normal(mean, std))
         return action
-
