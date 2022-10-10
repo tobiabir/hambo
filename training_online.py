@@ -129,7 +129,7 @@ if __name__ == "__main__":
         env = gym.make("Swimmer-v3")
         env = envs.WrapperEnvSwimmer(env)
     elif args.name_env == "Hopper":
-        env = gym.make("Hopper-v2")
+        env = gym.make("Hopper-v3")
         env = envs.WrapperEnvHopper(env)
     elif args.name_env == "HalfCheetah":
         env = gym.make("HalfCheetah-v3")
