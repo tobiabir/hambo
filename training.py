@@ -110,6 +110,41 @@ def train_ensemble_adversarial(model, dataset, agent, model_termination, weight_
     return train_ensemble(model, dataset, fn_loss, lr, size_batch, device)
 
 
+def set_grad_svgd(parameters, loss, kernel=utils.KernelRBF()):
+    """Set the gradients of the parameters to the phi from [Stein Variational Gradient Descent](https://arxiv.org/abs/1608.04471)
+
+    Args:
+        parameters: iterable containing the parameter tensors
+        loss:       the loss to be used (typically the negative log MAP)
+        kernel:     the kernel to use
+
+    Returns:
+        None
+    """
+    parameters = list(parameters)
+
+    # compute gradient of loss (score)
+    grads_loss = torch.autograd.grad(loss, parameters)
+    grad_loss = torch.cat([grad.flatten(start_dim=1) for grad in grads_loss], dim=1)
+
+    # compute kernel matrix and its gradient
+    w = torch.cat([parameter.flatten(start_dim=1) for parameter in parameters], dim=1)
+    k = kernel(w, w.detach())
+    grad_k = torch.autograd.grad(k.sum(), w)[0]
+
+    # compute svgd gradient
+    with torch.no_grad():
+        grad = (k @ grad_loss + grad_k) / w.shape[0]
+
+    # set parameters gradients to svgd gradients
+    shapes_parameter = [parameter.shape for parameter in parameters]
+    sizes_split = [np.prod(shape[1:]) for shape in shapes_parameter]
+    grads = list(torch.split(grad, sizes_split, dim=1))
+    for idx_grad in range(len(grads)):
+        grads[idx_grad] = grads[idx_grad].reshape(shapes_parameter[idx_grad])
+        parameters[idx_grad].grad = grads[idx_grad]
+
+
 def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
     """Train an ensemble until for five epochs none of the models improves on the evaluation set.
 
@@ -156,7 +191,7 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
             y = model.scaler_y.transform(y)
             loss = fn_loss(y_pred_means, y_pred_stds, y, state, action).sum()
             optimizer.zero_grad()
-            loss.backward()
+            set_grad_svgd(model.parameters(), loss)
             optimizer.step()
             idx_step += 1
         losses_eval_curr = evaluation.evaluate_model(model, dataset_eval, [fn_loss], device)[0]
@@ -167,6 +202,7 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
                 state_dicts_best[idx_model] = state_dict
                 idxs_epoch_best[idx_model] = idx_epoch_curr
         idx_epoch_curr += 1
+        print(losses_eval_best)
 
     for idx_model in range(model.size_ensemble):
         model.load_state_dict_single(state_dicts_best[idx_model], idx_model)

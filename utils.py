@@ -104,3 +104,14 @@ def golden_section_search(f, a, b, eps=1e-5):
     # return (everything in [a, b] would be reasonable)
     return c
 
+
+class KernelRBF(torch.nn.Module):
+
+    def __init__(self, sigma=1.0):
+        super().__init__()
+        self.gamma = 1 / (2 * sigma**2)
+
+    def forward(self, x1, x2):
+        norm_sq = torch.diag(x1 @ x1.T).unsqueeze(dim=1) - 2 * x1 @ x2.T + torch.diag(x2 @ x2.T).unsqueeze(dim=0)
+        y = torch.exp(-self.gamma * norm_sq)
+        return y
