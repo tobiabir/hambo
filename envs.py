@@ -83,6 +83,7 @@ class WrapperEnv(gym.core.Wrapper):
 
     def step(self, action):
         state, reward, done, info = self.env.step(action)
+        state = np.float32(state)
         reward = np.float32(reward)
         if "TimeLimit.truncated" not in info:
             info["TimeLimit.truncated"] = False
@@ -91,6 +92,7 @@ class WrapperEnv(gym.core.Wrapper):
 
     def reset(self, seed=None):
         state = self.env.reset(seed=seed)
+        state = np.float32(state)
         self.state = state
         return state
 
