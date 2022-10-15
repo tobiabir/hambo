@@ -176,7 +176,7 @@ if __name__ == "__main__":
             agent.train()
             if (idx_round + 1) % args.interval_rollout_model == 0 and idx_round > 0:
                 if args.method_sampling == "TS1":
-                    agent_antagonist.epsilon -= 1.0 / args.num_rounds
+                    agent_antagonist.epsilon -= args.interval_rollout_model / args.num_rounds
                 env_model.rollout(agent, dataset_model, args.num_episodes_rollout_model, args.max_length_rollout_model)
             dataloader = data.get_dataloader(dataset_model, None, args.num_steps_train_agent, args.size_batch)
             for batch in dataloader:
