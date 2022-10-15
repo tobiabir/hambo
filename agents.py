@@ -368,7 +368,7 @@ class AgentDQN(Agent):
         q = self.critic.get_distr(state)[0][idxs_batch, action]
 
         # computing loss
-        loss_q = torch.nn.functional.smooth_l1_loss(q, q_target)
+        loss_q = torch.nn.functional.mse_loss(q, q_target)
 
         # backpropagation
         self.optim_critic.zero_grad()
