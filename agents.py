@@ -306,7 +306,7 @@ class AgentSACAntagonist(AgentSAC):
 
 
 class AgentDQN(Agent):
-    """General agent learning via [DQN](https://arxiv.org/abs/1312.5602)
+    """General agent learning via [Double DQN](https://arxiv.org/abs/1509.06461)
     """
 
     def __init__(self, space_state, space_action, args):
@@ -355,13 +355,16 @@ class AgentDQN(Agent):
         state_next = state_next.to(self.device)
         done = done.to(self.device)
 
+        # defining helpers
+        idxs_batch = torch.arange(0, state.shape[0], device=self.device)
+
         # computing target
         with torch.no_grad():
-            q_target_next, _ = self.critic_target.get_distr(state_next)[0].max(dim=1)
+            action_next = self.critic.get_distr(state_next)[0].argmax(dim=1)
+            q_target_next = self.critic_target.get_distr(state_next)[0][idxs_batch, action_next]
             q_target = reward + (1 - done) * self.gamma * q_target_next
 
         # computing prediction
-        idxs_batch = torch.arange(0, state.shape[0], device=self.device)
         q = self.critic.get_distr(state)[0][idxs_batch, action]
 
         # computing loss
