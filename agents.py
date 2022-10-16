@@ -306,7 +306,7 @@ class AgentSACAntagonist(AgentSAC):
 
 
 class AgentDQN(Agent):
-    """General agent learning via [Double DQN](https://arxiv.org/abs/1509.06461)
+    """General agent learning via Double Weighted DQN
     """
 
     def __init__(self, space_state, space_action, args):
@@ -360,8 +360,8 @@ class AgentDQN(Agent):
 
         # computing target
         with torch.no_grad():
-            action_next = self.critic.get_distr(state_next)[0].argmax(dim=1)
-            q_target_next = self.critic_target.get_distr(state_next)[0][idxs_batch, action_next]
+            prob_action_next = torch.nn.functional.softmax(self.critic.get_distr(state_next)[0], dim=1)
+            q_target_next = (prob_action_next * self.critic_target.get_distr(state_next)[0]).sum(dim=1)
             q_target = reward + (1 - done) * self.gamma * q_target_next
 
         # computing prediction
