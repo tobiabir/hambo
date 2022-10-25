@@ -306,7 +306,7 @@ class AgentSACAntagonist(AgentSAC):
 
 
 class AgentDQN(Agent):
-    """General agent learning via Double Weighted DQN
+    """General agent learning via Clipped Double DQN
     """
 
     def __init__(self, space_state, space_action, args):
@@ -319,11 +319,16 @@ class AgentDQN(Agent):
         self.agent_random = AgentRandom(space_action)
         num_h = 2
         dim_h = 256
-        self.critic = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
-        self.critic_target = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
-        self.critic_target.load_state_dict(self.critic.state_dict())
-        self.critic_target.eval()
-        self.optim_critic = torch.optim.Adam(self.critic.parameters(), lr=args.lr_agent)
+        self.critic1 = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic2 = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic_target1 = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic_target2 = models.NetDense(dim_state, dim_action, num_h, dim_h).to(self.device)
+        self.critic_target1.load_state_dict(self.critic1.state_dict())
+        self.critic_target2.load_state_dict(self.critic2.state_dict())
+        self.critic_target1.eval()
+        self.critic_target2.eval()
+        self.optim_critic1 = torch.optim.Adam(self.critic1.parameters(), lr=args.lr_agent)
+        self.optim_critic2 = torch.optim.Adam(self.critic2.parameters(), lr=args.lr_agent)
         self.epsilon = 1.0
         self.training = True
 
@@ -339,7 +344,7 @@ class AgentDQN(Agent):
             return self.agent_random.get_action(state)
         state = torch.tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            q = self.critic.get_distr(state)[0]
+            q = torch.min(self.critic1.get_distr(state)[0], self.critic2.get_distr(state)[0])
         action = torch.argmax(q, dim=1)
         action = action.cpu().numpy()
         if len(state.shape) == 1:
@@ -360,36 +365,48 @@ class AgentDQN(Agent):
 
         # computing target
         with torch.no_grad():
-            prob_action_next = torch.nn.functional.softmax(self.critic.get_distr(state_next)[0], dim=1)
-            q_target_next = (prob_action_next * self.critic_target.get_distr(state_next)[0]).sum(dim=1)
+            v_next = torch.min(self.critic1.get_distr(state_next)[0], self.critic2.get_distr(state_next)[0])
+            action_next = torch.argmax(v_next, dim=1)
+            v_target_next = torch.min(self.critic_target1.get_distr(state_next)[0], self.critic_target2.get_distr(state_next)[0])
+            q_target_next = v_target_next[idxs_batch, action_next]
             q_target = reward + (1 - done) * self.gamma * q_target_next
 
         # computing prediction
-        q = self.critic.get_distr(state)[0][idxs_batch, action]
+        q1 = self.critic1.get_distr(state)[0][idxs_batch, action]
+        q2 = self.critic2.get_distr(state)[0][idxs_batch, action]
 
         # computing loss
-        loss_q = torch.nn.functional.mse_loss(q, q_target)
+        loss_q1 = torch.nn.functional.mse_loss(q1, q_target)
+        loss_q2 = torch.nn.functional.mse_loss(q2, q_target)
 
         # backpropagation
-        self.optim_critic.zero_grad()
-        loss_q.backward()
-        self.optim_critic.step()
+        self.optim_critic1.zero_grad()
+        loss_q1.backward()
+        self.optim_critic1.step()
+        self.optim_critic2.zero_grad()
+        loss_q2.backward()
+        self.optim_critic2.step()
 
         # soft update of target model
-        utils.soft_update(self.critic_target, self.critic, self.tau)
+        utils.soft_update(self.critic_target1, self.critic1, self.tau)
+        utils.soft_update(self.critic_target2, self.critic2, self.tau)
 
         # return loss
+        loss_q = loss_q1 + loss_q2
         loss_q = loss_q.detach().cpu().item()
         return {"loss_critic": loss_q}
 
     def to(self, device):
-        self.critic.to(device)
-        self.critic_target.to(device)
+        self.critic1.to(device)
+        self.critic2.to(device)
+        self.critic_target1.to(device)
+        self.critic_target2.to(device)
         self.device = device
         return self
 
     def train(self):
-        self.critic.train()
+        self.critic1.train()
+        self.critic2.train()
         self.training = True
 
 
