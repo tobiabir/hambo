@@ -336,7 +336,8 @@ class AgentDQN(Agent):
         return data
 
     def eval(self):
-        self.critic.eval()
+        self.critic1.eval()
+        self.critic2.eval()
         self.training = False
 
     def get_action(self, state):
