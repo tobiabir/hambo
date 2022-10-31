@@ -116,6 +116,8 @@ if __name__ == "__main__":
         env = envs.WrapperEnvHopper(env)
     elif "Pendulum" in id_env:
         env = envs.WrapperEnvPendulum(env)
+    elif "Reacher" in id_env:
+        env = envs.WrapperEnvReacher(env)
     elif "Walker" in id_env:
         env = envs.WrapperEnvWalker(env)
     env.reset(args.seed)

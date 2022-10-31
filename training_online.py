@@ -19,7 +19,7 @@ import utils
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="HUCRL")
-    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "InvertedPendulum", "Swimmer", "Hopper", "HalfCheetah"], required=True,
+    parser.add_argument("--name_env", type=str, choices=["Point", "MountainCar", "Pendulum", "InvertedPendulum", "Swimmer", "Hopper", "HalfCheetah", "Reacher"], required=True,
                         help="name of the environment")
     parser.add_argument("--id_experiment", type=str,
                         help="id of the experiment")
@@ -133,6 +133,9 @@ if __name__ == "__main__":
         env = envs.WrapperEnvHopper(env)
     elif args.name_env == "HalfCheetah":
         env = gym.make("HalfCheetah-v3")
+        env = envs.WrapperEnvHalfCheetah(env)
+    elif args.name_env == "Reacher":
+        env = gym.make("Reacher-v2")
         env = envs.WrapperEnvHalfCheetah(env)
 
     if args.model == "GP":
