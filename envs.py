@@ -155,6 +155,14 @@ class WrapperEnvHalfCheetah(WrapperEnv):
         return False
 
 
+class WrapperEnvReacher(WrapperEnv):
+
+    def done(self, state):
+        if len(state.shape) == 2:
+            return np.zeros(state.shape[0], dtype=np.bool_)
+        return False
+
+
 class WrapperEnvWalker(WrapperEnv):
 
     def done(self, state):
