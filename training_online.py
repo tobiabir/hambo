@@ -224,4 +224,3 @@ if __name__ == "__main__":
             return_eval = evaluation.evaluate_agent(agent, env_eval, args.num_episodes_eval_agent)
             wandb.log({"return_eval": return_eval, "idx_step": idx_step})
             print(f"idx_step: {idx_step}, return_eval: {return_eval}")
-
