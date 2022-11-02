@@ -4,6 +4,7 @@ __pycache__
 *tmp*
 Logs
 lsf*
+slurm*
 wandb
 Checkpoints
 Datasets
