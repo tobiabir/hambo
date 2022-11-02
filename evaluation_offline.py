@@ -187,9 +187,6 @@ if __name__ == "__main__":
             if (idx_round + 1) % args.interval_eval_agent == 0:
                 return_eval = evaluation.evaluate_agent(agent, env_model, args.num_episodes_eval)
                 print(f"idx_round: {idx_round}, return_eval: {return_eval}")
-
-        # save antagonist checkpoint
-        torch.save(agent_antagonist, "checkpoint_antagonist_tmp")
     
     else:
         agent = agent_protagonist
