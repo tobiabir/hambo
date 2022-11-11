@@ -345,13 +345,14 @@ class EnvModelHallucinated(EnvModel):
         with torch.no_grad():
             y_means, y_stds = self.model_transition(x)
 
-        # extract reward predictions
-        y_mean, y_std, y_std_epistemic = self.model_transition._aggregate_distrs(y_means, y_stds, epistemic=True)
-        reward_mean = y_mean[:, :1]
-        reward_std = y_std[:, :1]
-        reward_std_epistemic = y_std_epistemic[:, :1]
-
         if self.method_sampling == "DS":
+            # aggregate
+            y_mean, y_std, y_std_epistemic = self.model_transition._aggregate_distrs(y_means, y_stds, epistemic=True)
+            # extract reward predictions
+            reward_mean = y_mean[:, :1]
+            reward_std = y_std[:, :1]
+            reward_std_epistemic = y_std_epistemic[:, :1]
+
             # extract next state predictions
             state_next_mean = y_mean[:, 1:]
             state_next_std = y_std[:, 1:]
@@ -364,24 +365,38 @@ class EnvModelHallucinated(EnvModel):
             # apply hallucinated control
             state_next_mean = state_next_mean + self.beta * state_next_std_epistemic * action_hallucinated
 
+            # sample
+            if self.use_aleatoric:
+                reward = torch.distributions.Normal(reward_mean, reward_std).sample()
+                state_next = torch.distributions.Normal(state_next_mean, state_next_std_aleatoric)
+            else:
+                reward = torch.distributions.Normal(reward_mean, reward_std_epistemic).sample()
+                state_next = state_next_mean
+
         else:
-            # extract next state predictions
+            # extract predictions
             y_means = y_means[self.model_transition.idxs_elites]
             y_stds = y_stds[self.model_transition.idxs_elites]
+            size_batch = x.shape[0]
+            idxs_model = torch.randint(0, self.model_transition.num_elites, (size_batch,), device=self.device)
             idxs_batch = torch.arange(0, x.shape[0], device=self.device)
-            y_mean = y_means[action_hallucinated, idxs_batch]
-            y_std = y_stds[action_hallucinated, idxs_batch]
+            reward_mean = y_means[idxs_model, idxs_batch, :1]
+            reward_std = y_stds[idxs_model, idxs_batch, :1]
+            state_next_mean = y_means[action_hallucinated, idxs_batch, 1:]
+            state_next_std = y_stds[action_hallucinated, idxs_batch, 1:]
+            y_mean = torch.cat((reward_mean, state_next_mean), dim=-1)
+            y_std = torch.cat((reward_std, state_next_std), dim=-1)
             y_mean, y_std = self.model_transition.scaler_y.inverse_transform(y_mean, y_std)
-            state_next_mean = y_mean[:, 1:]
-            state_next_std = y_std[:, 1:]
 
-        # if use_aleatoric: sample using aleatoric uncertainty
-        if self.use_aleatoric:
-            reward = torch.distributions.Normal(reward_mean, reward_std).sample()
-            state_next = torch.distributions.Normal(state_next_mean, state_next_std).sample()
-        else:
-            reward = torch.distributions.Normal(reward_mean, reward_std_epistemic).sample()
-            state_next = state_next_mean
+            # sample
+            if self.use_aleatoric:
+                y = torch.distributions.Normal(y_mean, y_std).sample()
+            else:
+                y = y_mean
+
+            # split into reward and next state
+            reward = y[:, :1]
+            state_next = y[:, 1:]
 
         # we predict state_next - state -> add state to next state
         state_next += state
