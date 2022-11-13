@@ -368,7 +368,7 @@ class EnvModelHallucinated(EnvModel):
             # sample
             if self.use_aleatoric:
                 reward = torch.distributions.Normal(reward_mean, reward_std).sample()
-                state_next = torch.distributions.Normal(state_next_mean, state_next_std_aleatoric)
+                state_next = torch.distributions.Normal(state_next_mean, state_next_std_aleatoric).sample()
             else:
                 reward = torch.distributions.Normal(reward_mean, reward_std_epistemic).sample()
                 state_next = state_next_mean
