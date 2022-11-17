@@ -253,8 +253,10 @@ class EnvModel(gym.core.Env):
 
         # get reward and apply reward penalty
         reward = y[..., :1]
-        penalty_reward = torch.amax(torch.linalg.norm(y_stds, dim=2), dim=0).unsqueeze(dim=1)
-        reward -= self.weight_penalty_reward * penalty_reward
+        if self.weight_penalty_reward != 0.0:
+            y_means, y_stds = self.model_transition.scaler_y.inverse_transform(y_means, y_stds)
+            penalty_reward = torch.amax(torch.linalg.norm(y_stds, dim=2), dim=0).unsqueeze(dim=1)
+            reward -= self.weight_penalty_reward * penalty_reward
 
         # get next state and add old state (note: we predict state difference)
         state_next = state + y[..., 1:]
