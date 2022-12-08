@@ -107,7 +107,7 @@ def golden_section_search(f, a, b, eps=1e-5):
 
 class KernelRBF(torch.nn.Module):
 
-    def __init__(self, sigma=1.0):
+    def __init__(self, sigma=10.0):
         super().__init__()
         self.gamma = 1 / (2 * sigma**2)
 
