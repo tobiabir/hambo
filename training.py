@@ -201,8 +201,8 @@ def train_ensemble(model, dataset, fn_loss, lr, size_batch, device):
                 losses_eval_best[idx_model] = losses_eval_curr[idx_model]
                 state_dicts_best[idx_model] = state_dict
                 idxs_epoch_best[idx_model] = idx_epoch_curr
+        print(idx_epoch_curr, losses_eval_best)
         idx_epoch_curr += 1
-        print(losses_eval_best)
 
     for idx_model in range(model.size_ensemble):
         model.load_state_dict_single(state_dicts_best[idx_model], idx_model)
