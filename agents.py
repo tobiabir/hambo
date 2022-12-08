@@ -366,10 +366,11 @@ class AgentDQN(Agent):
 
         # computing target
         with torch.no_grad():
-            v_next = torch.min(self.critic1.get_distr(state_next)[0], self.critic2.get_distr(state_next)[0])
-            action_next = torch.argmax(v_next, dim=1)
-            v_target_next = torch.min(self.critic_target1.get_distr(state_next)[0], self.critic_target2.get_distr(state_next)[0])
-            q_target_next = v_target_next[idxs_batch, action_next]
+            action_next1 = torch.argmax(self.critic1.get_distr(state_next)[0], dim=1)
+            action_next2 = torch.argmax(self.critic2.get_distr(state_next)[0], dim=2)
+            q_target_next1 = self.critic_target1.get_distr(state_next)[0][idxs_batch, action_next1]
+            q_target_next2 = self.critic_target2.get_distr(state_next)[0][idxs_batch, action_next2]
+            q_target_next = torch.min(q_target_next1, q_target_next2)
             q_target = reward + (1 - done) * self.gamma * q_target_next
 
         # computing prediction
