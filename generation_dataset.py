@@ -42,7 +42,7 @@ if __name__ == "__main__":
         agent = agents.AgentRandom(env.action_space)
     else:
         checkpoint = torch.load(args.path_agent)
-        agent = checkpoint#["agent"]
+        agent = checkpoint["agent"]
 
     dataset = data.DatasetSARS()
 
