@@ -368,8 +368,8 @@ class AgentDQN(Agent):
         with torch.no_grad():
             prob_action_next1 = torch.nn.functional.softmax(self.critic1.get_distr(state_next)[0], dim=1)
             prob_action_next2 = torch.nn.functional.softmax(self.critic2.get_distr(state_next)[0], dim=1)
-            q_target_next1 = prob_action_next1 * self.critic_target1.get_distr(state_next)[0]
-            q_target_next2 = prob_action_next2 * self.critic_target2.get_distr(state_next)[0]
+            q_target_next1 = torch.sum(prob_action_next1 * self.critic_target1.get_distr(state_next)[0], dim=1)
+            q_target_next2 = torch.sum(prob_action_next2 * self.critic_target2.get_distr(state_next)[0], dim=1)
             q_target_next = torch.min(q_target_next1, q_target_next2)
             q_target = reward + (1 - done) * self.gamma * q_target_next
 
