@@ -88,7 +88,7 @@ class ScalerStandard():
 
     def fit(self, data, device="cpu"):
         self.mean = torch.mean(data, dim=0).to(device)
-        self.std = torch.std(data, dim=0).to(device)
+        self.std = torch.std(data, dim=0).to(device) + 1e-8
 
     def transform(self, data):
         if not self.active:
