@@ -193,10 +193,7 @@ if __name__ == "__main__":
 
         model.eval()
         if args.hallucinate:
-            if args.method_sampling == "DS":
-                EnvModel = envs.EnvModelHallucinated
-            else:
-                EnvModel = envs.EnvModelHallucinatedDeterministic
+            EnvModel = envs.EnvModelHallucinated
         else:
             EnvModel = envs.EnvModel
         env_model = EnvModel(env.observation_space, env.action_space, dataset_states_initial, model, env.done, args)
