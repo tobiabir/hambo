@@ -179,12 +179,23 @@ if __name__ == "__main__":
 
     # halfcheetah horizon
     config = {
-        "title": r"Hopper; $|D_b| = 4 \times 10^6$",
+        "title": r"Halfcheetah; $|D_b| = 4 \times 10^6$",
         "paths_results": ["results_halfcheetah_5_4000000_noaleatoric_svgd10.0_wpm0.01_1000000_100", "results_halfcheetah_5_4000000_noaleatoric_svgd10.0_wpm0.01_1000000_150"],
         "ticks_x": [100, 150],
         "label_x": label_x_horizon,
         "show_legend": False,
         "path_visual": os.path.join(dir_visuals, "visual_ope_halfcheetah_horizon_noaleatoric.pdf")
+    }
+    configs.append(config)
+
+    # halfcheetah diversity
+    config = {
+        "title": r"Halfcheetah; Horizon $T = 100$; $|D_b| = 4 \times 10^6$",
+        "paths_results": ["results_halfcheetah_5_4000000_noaleatoric_svgd10.0_wpm0.01_1000000_100", "results_halfcheetah_12345_4000000_noaleatoric_svgd10.0_wpm0.01_1000000_100"],
+        "ticks_x": ["{5}", "{1,2,3,4,5}"],
+        "label_x": label_x_horizon,
+        "show_legend": True,
+        "path_visual": os.path.join(dir_visuals, "visual_ope_halfcheetah_diversity_noaleatoric.pdf")
     }
     configs.append(config)
 

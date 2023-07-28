@@ -91,15 +91,17 @@ class AgentPointOptimal(Agent):
     """Agent taking the optimal actions for the Point environment.
     """
 
-    def __init__(self):
+    def __init__(self, size_step=0.1, std=0.0):
         super().__init__()
+        self.size_step = size_step
+        self.std = std
 
     def get_action(self, state):
-        action_max_abs = np.ones(state.shape) * 0.1
+        action_max_abs = np.ones(state.shape) * self.size_step
         state_abs = np.abs(state)
         action_abs = np.minimum(state_abs, action_max_abs)
         action = - np.sign(state) * action_abs
-        return action
+        return action + np.random.normal(0, self.std)
 
 
 class AgentPointEscapeOptimal(Agent):
